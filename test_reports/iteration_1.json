@@ -1,0 +1,35 @@
+{
+  "summary": "Comprehensive backend regression for Travel Ledger V1. 28/28 pytest tests passed covering health, public BCBP decode, auth gating across 8 protected endpoints, full authenticated end-to-end flow (auth/me -> profile patch -> ingest -> review -> patch -> confirm -> flights/trips/dashboard/recompute), home round-trip grouping, duplicate detection, manual flight creation, artifact delete cascade, airports search, and full _id leakage scan. Frontend splash smoke test confirmed: 'Continue with Google' button with data-testid='google-signin-btn' renders on portrait mobile shell.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_travel_ledger.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "auth.py: get_current_user — when session.expires_at is naive datetime.now() comparison would fail; current code handles tz-naive case. OK.",
+    "server.py: /api/health key is 'flight_enrichment_enabled' (not 'enrichment_enabled' as one might expect from prompt wording). Test asserts current key. Consider also exposing a top-level 'enrichment_enabled' alias if the frontend reads that name.",
+    "server.py: `_recompute_for_user` deletes then re-inserts trips/city_stays/monthly_stats — for very large datasets this is fine for V1 but consider upserts later.",
+    "server.py: `delete_artifact` queries parsed_segments AFTER calling delete_many on the same collection — by then the related list is empty, so derived confirmed_segments cleanup is effectively a no-op. Reorder: query related ids -> delete confirmed -> delete parsed segments -> delete artifact.",
+    "server.py: PATCH /profile — when home_airport_iata is set to None, `.upper()` is guarded but a falsy empty string would raise — current guard handles it.",
+    "server.py: `_canonical_hash` uses booking_reference in the key; identical flight without PNR vs with PNR would not be detected as duplicate. Consider deriving hash without PNR for stronger duplicate detection (still works for the AC sample where PNR is present in both)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_travel_ledger.py",
+    "/app/backend/tests/__init__.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100% (smoke)"},
+  "test_credentials": "No app-managed creds. Test users seeded directly in MongoDB (test_database) per /app/auth_testing.md and /app/memory/test_credentials.md. Module-scoped fixture creates user + session_token and cleans up after.",
+  "seed_data_creation": "Module fixture inserts a user, user_profile, and user_session per test run; teardown deletes all docs (users/profiles/sessions/artifacts/parsed_segments/confirmed_segments/trips/city_stays/monthly_stats) for that user_id.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend is fully green for V1 ingest -> confirm -> dashboard pipeline. RAPIDAPI_KEY is intentionally absent so enrichment_enabled=false and enrichment_applied=false on ingest — this is by design (fail-open). Frontend deeper testing (post-login dashboard, scan flow) requires Emergent Google OAuth which cannot be exercised end-to-end from automation; use the seeded session_token cookie pattern from /app/auth_testing.md and set cookie via page.context.add_cookies before visiting /dashboard. The pytest suite at /app/backend/tests/test_travel_ledger.py is reusable as a regression baseline."
+}

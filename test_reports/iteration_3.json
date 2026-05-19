@@ -1,0 +1,34 @@
+{
+  "summary": "Iteration 3 (Ryoko rebrand + 3D globe + /cities + lookup TTL cache + quick-save) regression GREEN. Backend pytest 48/48 passed: existing 41 tests preserved + new TestCitiesEndpoint (4 tests covering 401-no-auth, window=all schema with BOM/DEL/GOI/DXB and BOM is_home + flights_in==flights_out==3 + connected_to has DEL/GOI/DXB, DEL both_legs=true with 1/1, window=3m and ytd filters), TestFlightLookupCache (2nd call returns cached=true, first cached=false), TestPdfUpload v2 format (Airline: IndiGo / Flight: 6E-345 / BOM to DEL / Date: 15 Feb 2026 / PNR ABC123 / Seat 12A -> parser_method=pypdf_regex, 6E/6E345/BOM/DEL/2026-02-15/12A/ABC123 with parse_confidence>=0.6). Frontend smoke (390x844 mobile): / shows 'RYOKO' brand (no 'TRAVEL LEDGER'); /home TopBar shows 'RYOKO' and bottom nav shows 'ADD' (not 'SCAN'); /map renders data-testid='globe3d-canvas' (3D textured globe), 'Cities' button with data-testid='cities-link' present on Map; /cities renders data-testid='cities-page' with all five window chips (window-3m/6m/12m/ytd/all), 'Mumbai' city card with home badge, 'AT HOME 59.6 days' and 'AWAY 15.7 days' summary cards, Delhi card listed with connected_to BOM; /import PDF upload via [data-testid='upload-pdf-btn'] -> file picker -> after upload preview shows both [data-testid='review-edit-btn'] and [data-testid='quick-save-btn']. WebGL globe and three-globe load without errors (only one benign GPU stall warning). Demo viz_token authentication works via localStorage.tl_session_token across all pages.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Import preview card", "issue": "After uploading a PDF for IndiGo 6E-345 BOM->DEL on 2026-02-15, the IATA codes are correctly displayed as BOM and DEL but the city labels underneath show 'Kolkata' and 'Port Blair' (because AeroDataBox enrichment for that date resolves 6E345 to a different real flight and unconditionally overwrites departure_city_name / arrival_city_name in _apply_enrichment). User-facing inconsistency.", "selector": "import preview", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_travel_ledger.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Consider gating city-name overwrites in server._apply_enrichment the same way airport_iata is gated: only fill departure_city_name / arrival_city_name when the source value is null. Otherwise BCBP/PDF/manual entries can show wrong city labels even though IATAs are correct (e.g., 6E345 BOM->DEL preview labeled Kolkata/Port Blair)."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now 934 lines; cities aggregation (~120 lines), PDF upload, and segment review handlers are large enough to extract into routers/cities.py + routers/segments.py + routers/pdf.py for readability and unit-testability.",
+    "_FLIGHT_LOOKUP_CACHE is per-process; under multiple uvicorn workers the cache hit-rate will drop. Acceptable for free-tier conservation but document or move to Redis if traffic grows.",
+    "_apply_enrichment still overwrites city names unconditionally (line ~186-187). Same root cause flagged in iter-2 for airport_iata is now patched, but city labels regressed visually in PDF preview. Mirror the null-check pattern.",
+    "/api/cities computes a fresh aggregation per request without caching; for users with hundreds of stays the loop + lookup_airport calls will slow down. Consider memoizing lookup_airport (already O(1) dict probably) and caching the response per (user_id, window) for a few seconds.",
+    "/api/cities response sets b['lat'] and b['lng'] from lookup_airport — these can be None for unknown IATAs; the 3D globe should handle this (skip markers). Verify Globe3D component filters out null coordinates.",
+    "Cities aggregation: when computing minutes_spent inside the 'partial-in-window' branch, only `end - cutoff` is used; if a stay is fully before the cutoff but `end > cutoff`, this is correct, but if `start < cutoff` and `end is None`, minutes will silently fall through as the original duration_minutes (no clipping). Edge case worth a unit test."
+  ],
+  "updated_files": ["/app/backend/tests/test_travel_ledger.py"],
+  "success_rate": {"backend": "100% (48/48)", "frontend": "100% (smoke - 13/13 testids verified)"},
+  "test_credentials": "Pre-seeded demo user: session_token='viz_token' (Authorization: Bearer viz_token) / user_id='demo_user_viz'. Frontend uses localStorage.tl_session_token='viz_token'.",
+  "seed_data_creation": "Module-scoped fixture creates throwaway test user/profile/session in MongoDB; teardown deletes all derived docs. Demo user (demo_user_viz, BOM, 6 flights) already seeded.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 3 added: rebrand to Ryoko (TopBar + Splash use 'RYOKO'), 3D globe via three-globe (data-testid='globe3d-canvas'), /api/cities endpoint with window filter (window=all|12m|6m|3m|ytd) and per-city fields (iata, city, country, lat, lng, days_spent, minutes_spent, visits, flights_in, flights_out, connected_to[], both_legs, incomplete, is_home, last_visit), /cities page (testid 'cities-page', chips 'window-3m'..'window-all', city cards with home badge), 10-min in-process TTL cache on /flights/lookup (returns cached=true on second hit), Quick-save button on /import (testid 'quick-save-btn') alongside Review (testid 'review-edit-btn'), bottom nav 'ADD' label (not 'SCAN'), 'Cities' link on /map (testid 'cities-link'). New PDF format with structured labels (Airline:/Flight:/Date:/PNR:/Seat:) parses via pypdf_regex with confidence>=0.6. All 48 pytest cases at /app/backend/tests/test_travel_ledger.py pass against live AeroDataBox. Only known issue is enrichment overwriting city labels in preview cards.",
+  "rca of the issue": "City-label mismatch in import preview is RCA'd to server._apply_enrichment unconditionally writing departure_city_name/arrival_city_name from enrichment payload even when source provided IATAs that map to a known city. Reproduction: upload reportlab PDF with 'Airline: IndiGo / Flight: 6E-345 / BOM to DEL / Date: 15 Feb 2026' -> preview shows BOM/DEL codes correct but Kolkata/Port Blair city labels (because AeroDataBox returned a different real flight for 6E345 on that date). Mitigation: in /app/backend/server.py _apply_enrichment, change `segment['departure_city_name'] = dep.get('city') or segment.get('departure_city_name')` to `if not segment.get('departure_city_name'): segment['departure_city_name'] = dep.get('city')` (and same for arrival_city_name). This mirrors the existing pattern for departure_airport_iata."
+}
