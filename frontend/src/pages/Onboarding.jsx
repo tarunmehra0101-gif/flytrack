@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, BriefcaseBusiness, Camera, MapPin, Plane, ShieldCheck, User2, Sparkles, Mail, Search } from "lucide-react";
+import { ArrowLeft, ArrowRight, BriefcaseBusiness, Check, MapPin, Plane, ShieldCheck, User2, Video } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/lib/api";
 import { saveMockProfile, useAuth } from "@/contexts/AuthContext";
@@ -13,7 +13,7 @@ export default function Onboarding() {
   const navigate = useNavigate();
   const { user, profile, fetchMe, mockAuth, setProfile } = useAuth();
   const [stepIdx, setStepIdx] = useState(0);
-  const [name, setName] = useState(profile?.preferred_name || "");
+  const [name, setName] = useState("");
   const [homeAirport, setHomeAirport] = useState(
     profile?.home_airport_iata ? { iata: profile.home_airport_iata, city: profile.home_city_name } : null
   );
@@ -22,9 +22,7 @@ export default function Onboarding() {
   const [saveError, setSaveError] = useState(null);
   const profileSavedRef = useRef(false);
 
-  useEffect(() => {
-    if (!name && user?.name) setName(user.name.split(" ")[0]);
-  }, [name, user?.name]);
+
 
   const steps = [
     {
@@ -126,14 +124,26 @@ export default function Onboarding() {
 
   return (
     <div className="h-full w-full flex flex-col px-6 pt-14 pb-8" data-testid="onboarding-page">
-      {/* Progress bar */}
-      <div className="flex gap-1.5 mb-10">
-        {steps.map((s, i) => (
-          <div
-            key={s.key}
-            className={`h-1 flex-1 rounded-full transition-all duration-500 ${i <= stepIdx ? "bg-primary" : "bg-border"}`}
-          />
-        ))}
+      {/* Back button + Progress bar */}
+      <div className="flex items-center gap-3 mb-10">
+        {stepIdx > 0 && (
+          <button
+            type="button"
+            onClick={() => setStepIdx(stepIdx - 1)}
+            className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition"
+            aria-label="Go back"
+          >
+            <ArrowLeft size={16} />
+          </button>
+        )}
+        <div className="flex gap-1.5 flex-1">
+          {steps.map((s, i) => (
+            <div
+              key={s.key}
+              className={`h-1 flex-1 rounded-full transition-all duration-500 ${i <= stepIdx ? "bg-primary" : "bg-border"}`}
+            />
+          ))}
+        </div>
       </div>
 
       <AnimatePresence mode="wait">
@@ -177,10 +187,9 @@ export default function Onboarding() {
             ) : step.key === "persona" ? (
               <div className="grid gap-3">
                 {[
-                  ["consultant", BriefcaseBusiness, "Consultant", "Client cities, home time, airport hours", "emerald"],
-                  ["creator", Camera, "Creator", "Shoots, places, memories", "violet"],
-                  ["frequent_flyer", Plane, "Frequent Flyer", "Routes, airlines, yearly rhythm", "sky"],
-                  ["exploring", MapPin, "Traveler", "Cities, stays, travel story", "gold"],
+                  ["consultant", BriefcaseBusiness, "Business Traveler", "Client meetings, airport hours, home-away balance", "emerald"],
+                  ["frequent_traveler", Plane, "Frequent Traveler", "Routes, airlines, miles, and yearly rhythm", "sky"],
+                  ["creator", Video, "Travel Influencer", "Destinations, stories, and content inspiration", "violet"],
                 ].map(([key, ChoiceIcon, label, desc, tone], idx) => (
                   <motion.button
                     key={key}
@@ -191,17 +200,22 @@ export default function Onboarding() {
                     transition={{ delay: idx * 0.05 }}
                     whileTap={{ scale: 0.97 }}
                     className={`tl-persona-card tl-persona-${tone} text-left flex items-center gap-3 ${
-                      travelType === key ? "is-active" : ""
+                      travelType === key ? "is-active ring-2 ring-primary" : ""
                     }`}
                     data-testid={`persona-${key}`}
                   >
                     <span className="tl-persona-icon">
                       <ChoiceIcon size={15} />
                     </span>
-                    <span className="relative z-10">
+                    <span className="relative z-10 flex-1">
                       <span className="block text-sm font-semibold">{label}</span>
                       <span className="block text-xs text-white/62">{desc}</span>
                     </span>
+                    {travelType === key && (
+                      <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
+                        <Check size={14} strokeWidth={3} />
+                      </span>
+                    )}
                   </motion.button>
                 ))}
               </div>
@@ -220,12 +234,12 @@ export default function Onboarding() {
               data-testid="onboarding-next-btn"
               onClick={onNext}
               disabled={!step.valid() || submitting}
-              className="tl-btn-primary w-full flex items-center justify-center gap-2"
+              className={`tl-btn-primary w-full flex items-center justify-center gap-2 ${!step.valid() ? "opacity-40 cursor-not-allowed" : ""}`}
             >
               {step.key === "persona"
-                ? (submitting ? "Setting up…" : "Take me in")
+                ? (submitting ? "Setting up…" : "Let's go ✈️")
                 : "Continue"}
-              {!submitting && <ArrowRight size={16} />}
+              {!submitting && step.key !== "persona" && <ArrowRight size={16} />}
             </button>
           </div>
         </motion.div>

@@ -230,8 +230,8 @@ export default function Settings() {
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center"><RefreshCcw size={16} /></div>
               <div>
-                <p className="text-sm font-medium">Recompute analytics</p>
-                <p className="text-xs text-muted-foreground">Rebuild trips, stays, monthly stats</p>
+                <p className="text-sm font-medium">Refresh my stats</p>
+                <p className="text-xs text-muted-foreground">Recalculate trips, stays, and monthly stats</p>
               </div>
             </div>
             <ChevronRight size={16} className="text-muted-foreground" />
@@ -244,7 +244,7 @@ export default function Settings() {
             ["Remind after travel days", "Nudge me when a new flight probably happened"],
             ["Milestone alerts", "Tell me when I hit route, city, or airport milestones"],
           ].map(([title, desc]) => (
-            <div key={title} className="p-4 flex items-center justify-between border-b last:border-b-0 border-border">
+            <div key={title} className="p-4 flex items-center justify-between border-b last:border-b-0 border-border opacity-50 pointer-events-none">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center"><Bell size={16} /></div>
                 <div>
@@ -297,7 +297,7 @@ export default function Settings() {
           <button onClick={signOut} className="w-full p-4 flex items-center justify-between hover:bg-secondary/50 transition" data-testid="logout-btn">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center"><LogOut size={16} /></div>
-              <p className="text-sm font-medium">Sign out</p>
+              <p className="text-sm font-medium">{mockAuth ? "Clear session" : "Sign out"}</p>
             </div>
             <ChevronRight size={16} className="text-muted-foreground" />
           </button>
@@ -305,7 +305,7 @@ export default function Settings() {
 
         <div className="flex items-center justify-center gap-2 mt-2 text-[11px] text-muted-foreground">
           <Plane size={11} className="text-primary" />
-          Ryoko · 旅行 · built for frequent flyers
+          Ryoko v1.0 · 旅行 · Built with ❤️
         </div>
       </div>
     </Shell>

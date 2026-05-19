@@ -26,8 +26,8 @@ export default function Splash() {
           transition={{ duration: 0.6 }}
           className="flex items-center gap-2 text-white"
         >
-          <div className="w-8 h-8 rounded-xl bg-white/10 backdrop-blur flex items-center justify-center border border-white/20">
-            <Plane size={15} strokeWidth={2.5} />
+          <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur flex items-center justify-center border border-white/20">
+            <Plane size={19} strokeWidth={2.5} />
           </div>
           <span className="text-[10px] uppercase tracking-[0.3em] text-white/80">Ryoko</span>
         </motion.div>
@@ -44,7 +44,7 @@ export default function Splash() {
             <span className="italic font-normal">all in one place.</span>
           </h1>
           <p className="mt-5 text-white/75 text-[15px] leading-relaxed max-w-[28ch]">
-            Ryoko finds flights from Gmail, PDFs, and boarding passes so travellers and consultants can understand their year in the air.
+            Scan boarding passes, upload PDFs, or add flights manually — and watch your year in the air come alive.
           </p>
           <div className="mt-6 grid gap-2.5 text-[12px] text-white/80">
             {[
@@ -87,7 +87,7 @@ export default function Splash() {
             ) : (
               <>
                 <ShieldCheck size={18} />
-                Start my Flight Timeline
+                Get Started
               </>
             )}
           </button>

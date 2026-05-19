@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Clock4, MapPin, ChevronRight, PlaneTakeoff, Building2, Home as HomeIcon, Search, Trash2 } from "lucide-react";
+import { Clock4, MapPin, ChevronRight, ChevronDown, PlaneTakeoff, Building2, Home as HomeIcon, Search, Trash2, MoreHorizontal } from "lucide-react";
 import Shell from "@/components/shell/Shell";
 import BoardingPassCard from "@/components/BoardingPassCard";
 import FlightDetailSheet from "@/components/FlightDetailSheet";
@@ -28,7 +28,11 @@ function fmtMonth(iso) {
 function fmtDuration(minutes, type, isHome, city) {
   const hrs = Math.round((minutes || 0) / 60);
   const days = Math.max(0, (minutes || 0) / 1440);
-  if (type === "flight") return `${hrs}h flight`;
+  if (type === "flight") {
+    const h = Math.floor((minutes || 0) / 60);
+    const m = (minutes || 0) % 60;
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  }
   if (type === "airport") return `${hrs}h estimated airport time`;
   if (isHome) return `Back home in ${city || "your home city"} for ${Math.max(1, Math.round(days))} days`;
   return days >= 1 ? `${days.toFixed(1)} days in ${city}` : `${hrs}h in ${city}`;
@@ -44,6 +48,7 @@ export default function Timeline() {
   const [expanded, setExpanded] = useState({});
   const [selectedFlight, setSelectedFlight] = useState(null);
   const [query, setQuery] = useState("");
+  const [overflowOpen, setOverflowOpen] = useState(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -120,13 +125,22 @@ export default function Timeline() {
               placeholder="Search city, airport, airline, route"
               className="bg-transparent outline-none text-sm flex-1 placeholder:text-muted-foreground"
             />
-            <span className="tl-iata-pill !text-[10px]">{new Date().getFullYear()}</span>
+            <span className="tl-iata-pill !text-[10px] flex items-center gap-1">{new Date().getFullYear()} <ChevronDown size={10} /></span>
           </div>
         )}
 
         {loading ? (
           <div className="flex flex-col gap-3">
             {[1,2,3].map((i) => <div key={i} className="h-24 tl-card animate-pulse" />)}
+          </div>
+        ) : !hasContent && !loading ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center" data-testid="timeline-empty-main">
+            <div className="w-16 h-16 rounded-2xl bg-primary/12 text-primary flex items-center justify-center mb-4">
+              <PlaneTakeoff size={24} />
+            </div>
+            <p className="text-lg font-semibold">No flights yet</p>
+            <p className="text-sm text-muted-foreground mt-2 max-w-[280px]">Import your first flight to start building your timeline.</p>
+            <button onClick={() => navigate("/import")} className="tl-btn-primary mt-6 text-sm" data-testid="timeline-empty-import-cta">Import a flight</button>
           </div>
         ) : windows.length > 0 ? (
           <section>
@@ -157,7 +171,7 @@ export default function Timeline() {
                           <Icon size={15} />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">{fmtDate(w.start_time_utc)}</p>
+                          <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">{fmtDate(w.start_time_utc)}{w.type === "flight" && (flight?.departure_time_local || flight?.departure_time_utc) ? ` · ${(() => { try { const t = flight.departure_time_local || flight.departure_time_utc; if (String(t).match(/^\d{1,2}[:.]\d{2}/)) return String(t).replace(".", ":").slice(0, 5); return new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); } catch { return ""; } })()}` : ""}</p>
                           <p className="text-sm font-semibold mt-0.5 capitalize">
                             {w.type === "flight"
                               ? `${flight?.airline_name || "Flight"} ${flight?.flight_number || ""} · ${w.route}`
@@ -178,14 +192,27 @@ export default function Timeline() {
                         {flight && <ChevronRight size={15} className="text-muted-foreground mt-3" />}
                       </button>
                       {flight && (
-                        <button
-                          type="button"
-                          onClick={(e) => handleDeleteFlight(flight, e)}
-                          className="absolute right-3 bottom-3 text-muted-foreground hover:text-destructive transition-colors"
-                          title="Delete flight"
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                        <div className="absolute right-3 bottom-3">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setOverflowOpen(overflowOpen === flight.id ? null : flight.id); }}
+                            className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded-md hover:bg-secondary"
+                            title="More options"
+                          >
+                            <MoreHorizontal size={14} />
+                          </button>
+                          {overflowOpen === flight.id && (
+                            <div className="absolute right-0 bottom-full mb-1 bg-popover border border-border rounded-lg shadow-lg z-50 min-w-[140px] py-1 animate-fade-up">
+                              <button
+                                type="button"
+                                onClick={(e) => { setOverflowOpen(null); handleDeleteFlight(flight, e); }}
+                                className="w-full px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10 transition-colors flex items-center gap-2"
+                              >
+                                <Trash2 size={13} /> Delete flight
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       )}
                     </li>
                     </React.Fragment>

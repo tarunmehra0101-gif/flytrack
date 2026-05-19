@@ -18,6 +18,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format, parse } from "date-fns";
+import { CalendarDays } from "lucide-react";
 
 function fmtDate(iso) {
   if (!iso) return "—";
@@ -292,6 +296,11 @@ export default function Import() {
           setMTo({ iata: data.flight.arrival_airport_iata, city: data.flight.arrival_city_name });
         }
         if (data.flight.aircraft_type || data.source === "local_catalog") setMSelectedFlight(data.flight);
+
+        const depTime = data.flight.local_departure_time || (data.flight.departure_time_local ? data.flight.departure_time_local.slice(11, 16) : "");
+        const arrTime = data.flight.local_arrival_time || (data.flight.arrival_time_local ? data.flight.arrival_time_local.slice(11, 16) : "");
+        if (depTime) setMDepTime(depTime);
+        if (arrTime) setMArrTime(arrTime);
       } else {
         toast.info("Couldn't find this flight live. Fill in the remaining details below.");
       }
@@ -312,6 +321,14 @@ export default function Import() {
     setStatus("looking_up");
     try {
       const depTime = mDepTime || mSelectedFlight?.local_departure_time || mFetched?.flight?.local_departure_time;
+      let duration = mSelectedFlight?.flight_duration_minutes || mFetched?.flight?.flight_duration_minutes;
+      if (mDepTime && mArrTime) {
+        const [dh, dm] = mDepTime.split(":").map(Number);
+        const [ah, am] = mArrTime.split(":").map(Number);
+        let diff = (ah * 60 + am) - (dh * 60 + dm);
+        if (diff < 0) diff += 24 * 60; // Next day arrival
+        duration = diff;
+      }
       const { data } = await api.post("/flights/manual", {
         airline_iata: mAirline.iata,
         flight_number: mFlightNumber.trim(),
@@ -321,7 +338,7 @@ export default function Import() {
         seat_number: mSeat || null,
         booking_reference: mPnr || null,
         passenger_name: mPassenger || null,
-        flight_duration_minutes: mSelectedFlight?.flight_duration_minutes || mFetched?.flight?.flight_duration_minutes,
+        flight_duration_minutes: duration,
         aircraft_type: mSelectedFlight?.aircraft_type || mFetched?.flight?.aircraft_type,
         local_departure_time: depTime,
       });
@@ -351,12 +368,20 @@ export default function Import() {
 
   const selectCatalogFlight = (flight) => {
     setMSelectedFlight(flight);
-    setMFlightNumber(flight.number || flight.flight_number);
+    setMFlightNumber(flight.flight_number || flight.number || "");
     setMFrom({ iata: flight.departure_airport_iata, city: flight.departure_city_name });
     setMTo({ iata: flight.arrival_airport_iata, city: flight.arrival_city_name });
     setMFetched({ found: true, source: "local_catalog", flight });
-    if (flight.local_departure_time) setMDepTime(flight.local_departure_time);
-    toast.success(`${flight.flight_number} route pre-filled.`);
+    if (flight.local_departure_time) {
+      setMDepTime(flight.local_departure_time);
+      const duration = flight.flight_duration_minutes || 90;
+      const [h, m] = flight.local_departure_time.split(":").map(Number);
+      const totalMinutes = (h * 60 + m + duration) % (24 * 60);
+      const arrH = String(Math.floor(totalMinutes / 60)).padStart(2, "0");
+      const arrM = String(totalMinutes % 60).padStart(2, "0");
+      setMArrTime(`${arrH}:${arrM}`);
+    }
+    toast.success(`${flight.flight_number || flight.number} route pre-filled.`);
   };
 
   const hasCamera = isCameraAvailable();
@@ -397,7 +422,7 @@ export default function Import() {
             <button
               onClick={startLiveScan}
               disabled={isBusy}
-              className="tl-card tl-card-intense tl-card-interactive aspect-[4/3] flex flex-col items-center justify-center gap-3 border-2 border-dashed border-border/80 hover:border-primary/60 transition"
+              className="tl-card tl-card-intense tl-card-interactive aspect-[4/3] flex flex-col items-center justify-center gap-3 border-2 border-primary/40 hover:border-primary/70 transition shadow-[0_0_18px_-4px_hsl(var(--primary)/0.35)] animate-pulse-subtle"
               data-testid="live-scan-btn"
             >
               <div className="w-12 h-12 rounded-2xl bg-primary/12 text-primary flex items-center justify-center">
@@ -412,7 +437,7 @@ export default function Import() {
           <button
             onClick={() => !isBusy && imgRef.current?.click()}
             disabled={isBusy}
-            className={`tl-card tl-card-intense tl-card-interactive ${hasCamera ? 'aspect-[4/3]' : 'aspect-[2/1] col-span-2'} flex flex-col items-center justify-center gap-3 border-2 border-dashed border-border/80 hover:border-primary/60 transition`}
+            className={`tl-card tl-card-intense tl-card-interactive ${hasCamera ? 'aspect-[4/3]' : 'aspect-[2/1] col-span-2'} flex flex-col items-center justify-center gap-3 border-2 border-primary/40 hover:border-primary/70 transition shadow-[0_0_18px_-4px_hsl(var(--primary)/0.35)] animate-pulse-subtle`}
             data-testid="upload-cta"
           >
             <input
@@ -476,7 +501,7 @@ export default function Import() {
           className="text-[11px] text-muted-foreground underline underline-offset-4 self-center"
           data-testid="paste-barcode-fallback"
         >
-          Advanced: paste raw barcode text
+          Have a barcode string? Paste it here
         </button>
 
         {error && (
@@ -597,7 +622,7 @@ export default function Import() {
           <div className="flex flex-col gap-4">
             {/* Step 1: Airline */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Airline</label>
+              <label className="text-[10px] text-muted-foreground font-medium">Airline</label>
               <Autocomplete
                 kind="airline"
                 value={mAirline}
@@ -616,12 +641,13 @@ export default function Import() {
 
             {/* Step 2: Flight number */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Flight number</label>
+              <label className="text-[10px] text-muted-foreground font-medium">Flight number</label>
               <Input
                 data-testid="manual-flight-number"
                 placeholder={mAirline ? `e.g. ${mAirline.iata}505` : "e.g. AI505"}
                 value={mFlightNumber}
                 onChange={(e) => { setMFlightNumber(e.target.value); setMSelectedFlight(null); setMFetched(null); }}
+                autoComplete="off"
               />
             </div>
 
@@ -634,9 +660,9 @@ export default function Import() {
                     onClick={() => selectCatalogFlight(flight)}
                     className={`tl-card tl-card-interactive text-left p-2.5 flex items-center gap-3 text-xs ${mSelectedFlight?.flight_number === flight.flight_number ? "border-primary/50 bg-primary/5" : ""}`}
                   >
-                    <PlaneTakeoff size={13} className="text-primary flex-shrink-0" />
+                    <AirlineLogo iata={flight.airline_iata || mAirline.iata} size={20} />
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold">{flight.flight_number} · {flight.departure_airport_iata} → {flight.arrival_airport_iata}</p>
+                      <p className="font-semibold">{flight.flight_number || flight.number} · {flight.departure_airport_iata} → {flight.arrival_airport_iata}</p>
                       <p className="text-[10px] text-muted-foreground">{flight.departure_city_name} → {flight.arrival_city_name}</p>
                     </div>
                   </button>
@@ -673,11 +699,11 @@ export default function Import() {
             {(!mFetched?.found) && (mFetched || (mAirline && mFlightNumber)) && (
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] uppercase tracking-wider text-muted-foreground">From</label>
+                  <label className="text-[10px] text-muted-foreground font-medium">From</label>
                   <Autocomplete kind="airport" value={mFrom} onSelect={setMFrom} testId="manual-from-ac" placeholder="City or IATA" />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] uppercase tracking-wider text-muted-foreground">To</label>
+                  <label className="text-[10px] text-muted-foreground font-medium">To</label>
                   <Autocomplete kind="airport" value={mTo} onSelect={setMTo} testId="manual-to-ac" placeholder="City or IATA" />
                 </div>
               </div>
@@ -688,25 +714,50 @@ export default function Import() {
               <>
                 <div className="grid grid-cols-3 gap-2">
                   <div className="flex flex-col gap-1.5 col-span-1">
-                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Date</label>
-                    <Input data-testid="manual-date" type="date" value={mDate} onChange={(e) => setMDate(e.target.value)} />
+                    <label className="text-[10px] text-muted-foreground font-medium">Date</label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          className={`flex h-9 w-full rounded-xl border border-input bg-transparent px-3 py-2 text-xs text-left justify-between items-center focus:outline-none focus:ring-1 focus:ring-ring ${mDate ? "text-foreground" : "text-muted-foreground"}`}
+                          data-testid="manual-date"
+                        >
+                          <span>{mDate ? format(parse(mDate, "yyyy-MM-dd", new Date()), "dd/MM/yyyy") : "Select date"}</span>
+                          <CalendarDays size={13} className="text-muted-foreground" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={mDate ? parse(mDate, "yyyy-MM-dd", new Date()) : undefined}
+                          onSelect={(date) => {
+                            if (date) {
+                              setMDate(format(date, "yyyy-MM-dd"));
+                            } else {
+                              setMDate("");
+                            }
+                          }}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1"><Clock size={9} /> Departure</label>
-                    <Input data-testid="manual-dep-time" type="time" value={mDepTime} onChange={(e) => setMDepTime(e.target.value)} placeholder="09:00" />
+                    <label className="text-[10px] text-muted-foreground flex items-center gap-1 font-medium"><Clock size={9} /> Departure</label>
+                    <Input data-testid="manual-dep-time" type="time" value={mDepTime} onChange={(e) => setMDepTime(e.target.value)} placeholder="09:00" autoComplete="off" />
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1"><Clock size={9} /> Arrival</label>
-                    <Input data-testid="manual-arr-time" type="time" value={mArrTime} onChange={(e) => setMArrTime(e.target.value)} placeholder="12:30" />
+                    <label className="text-[10px] text-muted-foreground flex items-center gap-1 font-medium"><Clock size={9} /> Arrival</label>
+                    <Input data-testid="manual-arr-time" type="time" value={mArrTime} onChange={(e) => setMArrTime(e.target.value)} placeholder="12:30" autoComplete="off" />
                   </div>
                 </div>
 
                 {/* Step 5: Optional details */}
                 <div className="grid grid-cols-2 gap-2">
-                  <Input data-testid="manual-pnr" placeholder="PNR / Booking ref" value={mPnr} onChange={(e) => setMPnr(e.target.value)} />
-                  <Input data-testid="manual-seat" placeholder="Seat (optional)" value={mSeat} onChange={(e) => setMSeat(e.target.value)} />
+                  <Input data-testid="manual-pnr" placeholder="PNR / Booking ref" value={mPnr} onChange={(e) => setMPnr(e.target.value)} autoComplete="off" />
+                  <Input data-testid="manual-seat" placeholder="Seat (optional)" value={mSeat} onChange={(e) => setMSeat(e.target.value)} autoComplete="off" />
                 </div>
-                <Input data-testid="manual-passenger" placeholder="Passenger name (optional)" value={mPassenger} onChange={(e) => setMPassenger(e.target.value)} />
+                <Input data-testid="manual-passenger" placeholder="Passenger name (optional)" value={mPassenger} onChange={(e) => setMPassenger(e.target.value)} autoComplete="off" />
               </>
             )}
           </div>

@@ -46,7 +46,7 @@ export default function BoardingPassCard({ flight, compact = false, footerRight 
   const arrTime = fmtTime(arrival_time_utc || arrival_time_local, flight_date);
   const dateLabel = fmtDate(departure_time_utc || flight_date);
   const needsReview = (missing_fields || []).length > 0 || time_confidence === "barcode_date_only" || time_confidence === "missing";
-  const timeLabel = needsReview ? "Needs review" : time_confidence === "estimated" ? "Estimated" : "Scheduled";
+  const timeLabel = needsReview ? "Needs review" : time_confidence === "estimated" ? "Estimated" : "Upcoming";
   const routeTitle = `${cityLabel(departure_airport_iata, departure_city_name)} ${departure_airport_iata || ""} -> ${cityLabel(arrival_airport_iata, arrival_city_name)} ${arrival_airport_iata || ""}`.trim();
 
   return (

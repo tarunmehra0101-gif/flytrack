@@ -70,7 +70,7 @@ export default function Review() {
 
   return (
     <Shell
-      title="Before you save"
+      title="Review Flight"
       leading={
         <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center" data-testid="review-back">
           <ArrowLeft size={16} />

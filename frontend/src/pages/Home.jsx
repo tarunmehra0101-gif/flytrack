@@ -223,7 +223,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!data?.total_flights) return;
-    api.get("/map", { params: { year: "all" } })
+    api.get("/map-data", { params: { year: "all" } })
       .then(({ data: res }) => setMapRoutes({ routes: res?.routes || [], markers: res?.airport_markers || [] }))
       .catch(() => {});
   }, [data?.total_flights]);
@@ -276,11 +276,11 @@ export default function Home() {
               <p className="text-[26px] font-light leading-tight tracking-tight mt-2">
                 You've spent{" "}
                 <span className="font-semibold text-primary">
-                  <CountUp value={data.total_air_hours} decimals={1} suffix=" hours" />
+                  <CountUp value={data?.total_air_hours || 0} decimals={1} suffix=" hours" />
                 </span>{" "}
                 above the clouds across{" "}
                 <span className="font-semibold">
-                  <CountUp value={data.total_flights} />
+                  <CountUp value={data?.total_flights || 0} />
                 </span>{" "}
                 flights ✈️
               </p>
@@ -306,7 +306,7 @@ export default function Home() {
           </motion.div>
 
           <div className="grid grid-cols-2 gap-3" data-testid="home-actions">
-            <ActionTile testId="home-add-flight" icon={PlusCircle} title="Add flights" desc="Find flights in Gmail or snap a boarding pass — takes seconds." onClick={() => navigate("/import")} />
+            <ActionTile testId="home-add-flight" icon={PlusCircle} title="Add flights" desc="Scan a boarding pass, upload a PDF, or add manually." onClick={() => navigate("/import")} />
             <ActionTile testId="home-timeline" icon={ListTree} title="My timeline" desc="Every flight, layover & trip — in one beautiful feed." onClick={() => navigate("/timeline")} />
             <ActionTile testId="home-map" icon={Map} title="Where I've been" desc="See every route & city on your personal travel map." onClick={() => navigate("/map")} />
             <ActionTile testId="home-wrapped" icon={Globe2} title="Year in review" desc="Your travel highlights, stats & personality — beautifully wrapped." onClick={() => navigate("/wrapped")} />
@@ -426,7 +426,7 @@ export default function Home() {
                       <div className="h-1 bg-muted rounded-full mt-1 overflow-hidden">
                         <div
                           className="h-full bg-primary rounded-full"
-                          style={{ width: `${Math.min(100, (c.minutes / Math.max(...data.top_cities.map(x => x.minutes))) * 100)}%` }}
+                          style={{ width: `${Math.min(100, ((c.minutes || 0) / Math.max(1, ...data.top_cities.map(x => x.minutes || 0))) * 100)}%` }}
                         />
                       </div>
                     </div>
@@ -527,7 +527,7 @@ export default function Home() {
             <DialogTitle>{detail === "route" ? "Route breakdown" : "Airline history"}</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-2">
-            {(detail === "route" ? data?.route_frequency : data?.airline_split || []).slice(0, 8).map((row, idx) => (
+            {(detail === "route" ? (data?.route_frequency || []) : (data?.airline_split || [])).slice(0, 8).map((row, idx) => (
               <div key={`${detail}-${idx}`} className="tl-card p-3 flex items-center justify-between text-sm">
                 <span className="font-medium">{row.route || row.airline_name || row.airline}</span>
                 <span className="tl-mono text-xs text-muted-foreground">{row.count} flights</span>
