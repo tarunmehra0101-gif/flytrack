@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Plane, Clock4, Home as HomeIcon, Building2, Route, Trophy, Timer, Sparkles, CalendarDays,
-  PlusCircle, Map, ListTree, Globe2, ArrowRight, Mail, Camera, MapPin
+  PlusCircle, Map, ListTree, Globe2, ArrowRight, Mail, Camera, MapPin, FileText
 } from "lucide-react";
 import { motion } from "framer-motion";
 import {
