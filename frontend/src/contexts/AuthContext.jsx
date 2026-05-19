@@ -40,15 +40,7 @@ export function AuthProvider({ children }) {
         setProfile(null);
         return null;
       }
-      if (session.provider_token) {
-        safeSetLocalStorage("gmail_provider_token", session.provider_token);
-      }
-      if (session.provider_refresh_token) {
-        safeSetLocalStorage("gmail_provider_refresh_token", session.provider_refresh_token);
-      }
-      if (session.provider_token && session.user?.app_metadata?.provider) {
-        safeSetLocalStorage("gmail_provider_scopes", "https://www.googleapis.com/auth/gmail.readonly");
-      }
+      // Provider tokens (if any) are no longer used since Gmail scanning was deprecated.
       const sbUser = session.user;
       const { data: profileRow, error: profileError } = await supabase
         .from("profiles")
