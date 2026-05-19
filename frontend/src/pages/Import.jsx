@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 import {
   Camera, Loader2, AlertTriangle, CheckCircle2,
   PenLine, History, FileText, Sparkles, X, Clock,
