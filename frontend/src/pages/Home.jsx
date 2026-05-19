@@ -107,9 +107,12 @@ function EmptyDashboard({ navigate, hello }) {
             <Sparkles size={13} />
             <span className="text-[10px] uppercase tracking-[0.22em]">Welcome aboard</span>
           </div>
-          <p className="text-[22px] font-light leading-snug tracking-tight">
-            Hey {hello}, your travel story starts here ✈️
-          </p>
+          <div className="flex items-center gap-2 text-[22px] font-light leading-snug tracking-tight">
+            <span>Hey {hello}, your travel story starts here</span>
+            <motion.div animate={{ y: [0, -3, 0], opacity: [0.7, 1, 0.7], rotate: [0, 5, 0] }} transition={{ repeat: Infinity, duration: 2.5, ease: "easeInOut" }}>
+              <Plane size={20} className="text-primary mt-1" />
+            </motion.div>
+          </div>
           <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
             Upload a PDF ticket, scan a boarding pass, or add a flight manually. Your personal travel map, stats & highlights are just one tap away.
           </p>

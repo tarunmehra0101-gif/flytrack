@@ -406,6 +406,14 @@ function mergeVisibleTicketFields(baseSegments, visibleSegments) {
       next.departure_airport_iata = next.departure_airport_iata || match.departure_airport_iata;
       next.arrival_airport_iata = next.arrival_airport_iata || match.arrival_airport_iata;
     }
+
+    if (!next.departure_time_local && next.airline_iata) {
+      const catalogInfo = lookupCatalogFlight({ airline_iata: next.airline_iata, flight_number: next.flight_number });
+      if (catalogInfo && catalogInfo.local_departure_time) {
+        next.departure_time_local = catalogInfo.local_departure_time;
+      }
+    }
+
     next.time_confidence = next.departure_time_local ? "visible_on_ticket" : (next.time_confidence || "barcode_date_only");
     next.missing_fields = [
       !next.airline_iata && "airline_iata",

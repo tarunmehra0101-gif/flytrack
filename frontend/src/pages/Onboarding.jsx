@@ -185,39 +185,53 @@ export default function Onboarding() {
                 testId="onboarding-home-ac"
               />
             ) : step.key === "persona" ? (
-              <div className="grid gap-3">
+              <div className="grid gap-4 mt-2">
                 {[
                   ["consultant", BriefcaseBusiness, "Business Traveler", "Client meetings, airport hours, home-away balance", "emerald"],
                   ["frequent_traveler", Plane, "Frequent Traveler", "Routes, airlines, miles, and yearly rhythm", "sky"],
                   ["creator", Video, "Travel Influencer", "Destinations, stories, and content inspiration", "violet"],
-                ].map(([key, ChoiceIcon, label, desc, tone], idx) => (
+                ].map(([key, ChoiceIcon, label, desc, tone], idx) => {
+                  const isActive = travelType === key;
+                  return (
                   <motion.button
                     key={key}
                     type="button"
                     onClick={() => setTravelType(key)}
-                    initial={{ opacity: 0, x: -12 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: idx * 0.05 }}
-                    whileTap={{ scale: 0.97 }}
-                    className={`tl-persona-card tl-persona-${tone} text-left flex items-center gap-3 ${
-                      travelType === key ? "is-active ring-2 ring-primary" : ""
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: idx * 0.08, duration: 0.4 }}
+                    whileTap={{ scale: 0.98 }}
+                    className={`relative overflow-hidden text-left flex items-start gap-4 p-5 rounded-[22px] border transition-all duration-300 ${
+                      isActive 
+                        ? "bg-primary/5 border-primary shadow-sm" 
+                        : "bg-card border-border hover:bg-muted/50 hover:border-muted-foreground/30"
                     }`}
                     data-testid={`persona-${key}`}
                   >
-                    <span className="tl-persona-icon">
-                      <ChoiceIcon size={15} />
-                    </span>
-                    <span className="relative z-10 flex-1">
-                      <span className="block text-sm font-semibold">{label}</span>
-                      <span className="block text-xs text-white/62">{desc}</span>
-                    </span>
-                    {travelType === key && (
-                      <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
-                        <Check size={14} strokeWidth={3} />
-                      </span>
+                    {isActive && (
+                      <motion.div 
+                        layoutId="active-persona-bg"
+                        className="absolute inset-0 bg-primary/5"
+                        initial={false}
+                        transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                      />
                     )}
+                    <div className={`relative z-10 w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 transition-colors duration-300 ${
+                      isActive ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                    }`}>
+                      <ChoiceIcon size={22} strokeWidth={2} />
+                    </div>
+                    <div className="relative z-10 flex-1 pt-0.5">
+                      <span className={`block text-base font-semibold mb-1 transition-colors duration-300 ${isActive ? "text-primary" : "text-foreground"}`}>{label}</span>
+                      <span className="block text-sm text-muted-foreground leading-relaxed pr-4">{desc}</span>
+                    </div>
+                    <div className={`relative z-10 w-6 h-6 mt-1 flex-shrink-0 rounded-full flex items-center justify-center transition-all duration-300 ${
+                      isActive ? "bg-primary text-primary-foreground scale-100" : "border-2 border-muted text-transparent scale-90 opacity-50"
+                    }`}>
+                      <Check size={14} strokeWidth={3} />
+                    </div>
                   </motion.button>
-                ))}
+                )})}
               </div>
 
             ) : null}

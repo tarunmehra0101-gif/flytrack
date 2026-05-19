@@ -14,7 +14,7 @@ async function ocrPdfPage(pdf, pageNo) {
 
 export async function extractPdfText(file, options = {}) {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/legacy/build/pdf.worker.min.mjs", import.meta.url).toString();
+  pdfjs.GlobalWorkerOptions.workerSrc = "https://unpkg.com/pdfjs-dist@5.7.284/legacy/build/pdf.worker.min.mjs";
   const buffer = await file.arrayBuffer();
   const pdf = await pdfjs.getDocument({ data: buffer }).promise;
   const pages = [];
@@ -41,7 +41,10 @@ export async function extractPdfText(file, options = {}) {
 
 export async function ocrImageFile(file) {
   const { createWorker } = await import("tesseract.js");
-  const worker = await createWorker("eng");
+  const worker = await createWorker("eng", 1, {
+    workerPath: "https://unpkg.com/tesseract.js@7.0.0/dist/worker.min.js",
+    corePath: "https://unpkg.com/tesseract.js-core@5.0.0",
+  });
   try {
     const result = await worker.recognize(file);
     return result?.data?.text || "";

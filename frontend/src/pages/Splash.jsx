@@ -38,19 +38,19 @@ export default function Splash() {
           transition={{ duration: 0.7, delay: 0.15 }}
           className="mt-auto text-white"
         >
-          <h1 className="text-[44px] leading-[1.05] font-light tracking-tighter">
-            Your flights, <br />
-            hours, cities, <br />
-            <span className="italic font-normal">all in one place.</span>
+          <h1 className="text-[42px] leading-[1.05] font-light tracking-tighter">
+            Turn your flights <br />
+            into a beautiful <br />
+            <span className="italic font-normal">travel diary.</span>
           </h1>
-          <p className="mt-5 text-white/75 text-[15px] leading-relaxed max-w-[28ch]">
-            Scan boarding passes, upload PDFs, or add flights manually — and watch your year in the air come alive.
+          <p className="mt-5 text-white/75 text-[15px] leading-relaxed max-w-[30ch]">
+            Simply scan your boarding passes or upload tickets, and we'll automatically build your personalized travel timeline.
           </p>
-          <div className="mt-6 grid gap-2.5 text-[12px] text-white/80">
+          <div className="mt-6 grid gap-3 text-[13px] text-white/85">
             {[
-              [Camera, "Scan boarding passes, PDFs, and email receipts"],
-              [ChartNoAxesCombined, "Track flights, air hours, cities, and routes"],
-              [Sparkles, "See home-away balance and yearly milestones"],
+              [ChartNoAxesCombined, "See exactly how much time you spend in the air"],
+              [Camera, "Keep a digital archive of your old boarding passes"],
+              [Sparkles, "Understand your travel habits and yearly milestones"],
             ].map(([Icon, text]) => (
               <div key={text} className="flex items-center gap-2">
                 <span className="w-7 h-7 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center">

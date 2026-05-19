@@ -190,7 +190,7 @@ const rows = [
   ["G8", "361", "BLR", "DEL", 170, "Airbus A320neo", "06:30"],
   ["G8", "101", "DEL", "BOM", 135, "Airbus A320neo", "07:00"],
 
-  // --- Domestic fillers (popular routes) ---
+  // --- Domestic fillers (popular routes - Expanded India Coverage) ---
   ["AI", "9601", "HYD", "DEL", 120, "Airbus A320neo", "06:45"],
   ["6E", "6051", "HYD", "BOM", 85, "Airbus A320neo", "07:00"],
   ["6E", "2701", "CCU", "DEL", 145, "Airbus A321neo", "06:00"],
@@ -209,6 +209,36 @@ const rows = [
   ["6E", "2811", "DEL", "PNQ", 130, "Airbus A320neo", "09:00"],
   ["AI", "616", "CCU", "BLR", 155, "Airbus A320neo", "14:00"],
   ["6E", "471", "BOM", "JAI", 115, "Airbus A320", "09:00"],
+  
+  // Extra India Routes
+  ["6E", "5123", "BOM", "PNQ", 45, "Airbus A320", "10:15"],
+  ["6E", "6321", "DEL", "PAT", 100, "Airbus A320neo", "05:40"],
+  ["6E", "611", "DEL", "LKO", 75, "Airbus A320neo", "06:20"],
+  ["6E", "7342", "BOM", "AMD", 70, "Airbus A320neo", "18:30"],
+  ["AI", "863", "DEL", "BOM", 135, "Airbus A321neo", "14:00"],
+  ["AI", "665", "DEL", "BLR", 165, "Airbus A320neo", "20:00"],
+  ["QP", "1103", "BOM", "BLR", 105, "Boeing 737 MAX 8", "07:30"],
+  ["QP", "1131", "BLR", "AMD", 120, "Boeing 737 MAX 8", "11:20"],
+  ["UK", "819", "DEL", "BLR", 165, "Airbus A320neo", "20:40"],
+  ["UK", "855", "BOM", "BLR", 105, "Airbus A320neo", "17:00"],
+  ["6E", "6511", "HYD", "MAA", 75, "Airbus A320neo", "09:10"],
+  ["6E", "7124", "MAA", "CCU", 135, "Airbus A320neo", "14:30"],
+  ["AI", "673", "BOM", "MAA", 115, "Airbus A321neo", "08:15"],
+  ["6E", "5234", "BLR", "PNQ", 85, "Airbus A320", "16:45"],
+  ["6E", "5312", "DEL", "IXB", 130, "Airbus A320neo", "11:00"],
+  ["SG", "8709", "BOM", "DEL", 135, "Boeing 737 MAX 8", "19:00"],
+  ["QP", "1314", "DEL", "AMD", 95, "Boeing 737 MAX 8", "16:50"],
+  ["AI", "803", "BLR", "DEL", 170, "Airbus A321neo", "06:10"],
+  ["6E", "6111", "CCU", "BLR", 155, "Airbus A321neo", "21:00"],
+  ["UK", "945", "DEL", "BOM", 130, "Airbus A321neo", "10:40"],
+  ["UK", "996", "BOM", "DEL", 135, "Boeing 787-9", "22:30"],
+  ["6E", "2112", "AMD", "DEL", 95, "Airbus A320neo", "08:30"],
+  ["6E", "2013", "CCU", "DEL", 145, "Airbus A321neo", "20:15"],
+  ["AI", "112", "MAA", "DEL", 170, "Airbus A320neo", "16:45"],
+  ["6E", "6356", "DEL", "MAA", 170, "Airbus A321neo", "10:00"],
+  ["6E", "711", "DEL", "TRV", 200, "Airbus A320neo", "07:15"],
+  ["6E", "6814", "BOM", "BLR", 100, "Airbus A320neo", "21:30"],
+  ["6E", "6206", "CCU", "BLR", 150, "Airbus A321neo", "06:15"],
 
   // --- Gulf carriers return legs ---
   ["EK", "509", "DXB", "DEL", 220, "Airbus A380", "09:30"],

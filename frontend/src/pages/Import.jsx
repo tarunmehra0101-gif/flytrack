@@ -386,8 +386,17 @@ export default function Import() {
 
   const hasCamera = isCameraAvailable();
 
+  const onboardingTitle = (
+    <span className="flex items-center gap-1.5">
+      Let's add your first flight
+      <motion.div animate={{ y: [0, -3, 0], opacity: [0.7, 1, 0.7], rotate: [0, 5, 0] }} transition={{ repeat: Infinity, duration: 2.5, ease: "easeInOut" }}>
+        <PlaneTakeoff size={15} className="text-primary" />
+      </motion.div>
+    </span>
+  );
+
   return (
-    <Shell title={isOnboarding ? "Let's add your first flight! ✈️" : "Add a flight"} hideNav={isOnboarding}>
+    <Shell title={isOnboarding ? onboardingTitle : "Add a flight"} hideNav={isOnboarding}>
       <div className="p-4 pb-10 flex flex-col gap-5 animate-fade-up" data-testid="import-page">
 
         {/* Live Scanner Overlay */}
@@ -696,7 +705,7 @@ export default function Import() {
             )}
 
             {/* Step 3: Route (manual if not fetched) */}
-            {(!mFetched?.found) && (mFetched || (mAirline && mFlightNumber)) && (
+            {(!mFetched?.found && mFetched) && (
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] text-muted-foreground font-medium">From</label>
