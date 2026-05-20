@@ -12,7 +12,7 @@ import logging
 import os
 import secrets
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -121,6 +121,9 @@ class ManualFlightReq(BaseModel):
     booking_reference: Optional[str] = None
     passenger_name: Optional[str] = None
     ticket_number: Optional[str] = None
+    flight_duration_minutes: Optional[int] = None
+    aircraft_type: Optional[str] = None
+    local_departure_time: Optional[str] = None
 
 
 # ---------- Helpers ----------
@@ -301,6 +304,13 @@ async def _confirm_segment_doc(seg: dict, user_id: str, recompute: bool = True) 
         "gate": seg.get("gate"),
         "status_text": seg.get("status_text"),
         "confidence_score": seg.get("confidence_score"),
+        "aircraft_type": seg.get("aircraft_type"),
+        "cabin_class": seg.get("cabin_class"),
+        "time_confidence": seg.get("time_confidence"),
+        "duration_source": seg.get("duration_source"),
+        "confidence": seg.get("confidence"),
+        "parser_rule": seg.get("parser_rule"),
+        "missing_fields": seg.get("missing_fields") or [],
         "is_duplicate_of": existing_dup["id"] if existing_dup else None,
         "status": "duplicate" if existing_dup else "confirmed",
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -658,6 +668,20 @@ async def create_manual(payload: ManualFlightReq, user: dict = Depends(_auth)):
     artifact_doc.pop("_id", None)
 
     flight_number = f"{payload.airline_iata.upper()}{payload.flight_number.lstrip('0')}"
+    duration = payload.flight_duration_minutes or 90
+    local_time = payload.local_departure_time or "09:00"
+
+    dep_utc_str = None
+    arr_utc_str = None
+    if payload.flight_date:
+        dep_utc_str = f"{payload.flight_date}T{local_time}:00.000Z"
+        try:
+            dep_dt = datetime.strptime(dep_utc_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+            arr_dt = dep_dt + timedelta(minutes=duration)
+            arr_utc_str = arr_dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        except Exception:
+            pass
+
     segment = {
         "id": f"pseg_{uuid.uuid4().hex[:12]}",
         "artifact_id": artifact_id,
@@ -674,19 +698,21 @@ async def create_manual(payload: ManualFlightReq, user: dict = Depends(_auth)):
         "departure_city_name": (dep or {}).get("city"),
         "arrival_city_name": (arr or {}).get("city"),
         "flight_date": payload.flight_date,
-        "departure_time_local": None,
+        "departure_time_local": local_time,
         "arrival_time_local": None,
-        "departure_time_utc": None,
-        "arrival_time_utc": None,
+        "departure_time_utc": dep_utc_str,
+        "arrival_time_utc": arr_utc_str,
+        "flight_duration_minutes": duration,
+        "aircraft_type": payload.aircraft_type,
         "seat_number": payload.seat_number,
         "terminal_departure": None,
         "terminal_arrival": None,
         "gate": None,
-        "confidence_score": 1.0,
-        "needs_review": True,
+        "confidence_score": 0.92,
+        "needs_review": False,
         "raw_json": None,
         "enrichment": None,
-        "status": "pending_review",
+        "status": "parsed",
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     enrichment = await flight_status_client.enrich_flight(flight_number, payload.flight_date)

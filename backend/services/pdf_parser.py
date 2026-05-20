@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 # Common airline IATA codes + names (kept in sync with airports.AIRLINES).
 AIRLINE_NAME_TO_IATA = {
+    "AIR INDIA EXPRESS": "IX", "AIRINDIA EXPRESS": "IX", "AIR-INDIA EXPRESS": "IX",
     "AIR INDIA": "AI", "INDIGO": "6E", "INDI GO": "6E", "VISTARA": "UK",
     "SPICEJET": "SG", "AKASA AIR": "QP", "AKASA": "QP",
     "EMIRATES": "EK", "ETIHAD": "EY", "QATAR AIRWAYS": "QR",
@@ -31,6 +32,9 @@ AIRLINE_NAME_TO_IATA = {
     "SINGAPORE AIRLINES": "SQ", "CATHAY PACIFIC": "CX", "THAI AIRWAYS": "TG",
     "UNITED AIRLINES": "UA", "AMERICAN AIRLINES": "AA", "DELTA AIR LINES": "DL",
     "TURKISH AIRLINES": "TK", "KLM": "KL", "SWISS": "LX",
+    "GO FIRST": "G8", "GO AIR": "G8", "GOFIRST": "G8",
+    "AIRASIA": "I5", "AIR ASIA": "I5",
+    "FLYDUBAI": "FZ", "OMAN AIR": "WY", "GULF AIR": "GF",
 }
 
 FLIGHT_NUM_RE = re.compile(r"\b([A-Z0-9]{2})\s*[-]?\s*(\d{1,4}[A-Z]?)\b")
@@ -138,10 +142,12 @@ def parse_pdf_ticket(pdf_bytes: bytes) -> dict:
             flight_num = f"{airline_iata}{flight_raw}"
     if not flight_num:
         m = FLIGHT_NUM_RE.search(text)
-        if m and m.group(1).isalpha():
-            airline_iata = airline_iata or m.group(1)
-            flight_raw = m.group(2)
-            flight_num = f"{airline_iata}{flight_raw}"
+        if m:
+            candidate_iata = m.group(1).upper()
+            if lookup_airline(candidate_iata) or candidate_iata.isalpha():
+                airline_iata = airline_iata or candidate_iata
+                flight_raw = m.group(2)
+                flight_num = f"{airline_iata}{flight_raw}"
 
     # Date
     date_iso = None
@@ -191,13 +197,10 @@ def parse_pdf_ticket(pdf_bytes: bytes) -> dict:
 
     seen_flights = []
     for m in FLIGHT_NUM_RE.finditer(text):
-        code, num = m.group(1), m.group(2)
-        if not code.isalpha() and not code[0].isdigit():
+        code, num = m.group(1).upper(), m.group(2)
+        if not lookup_airline(code) and not code.isalpha():
             continue
-        candidate_airline = code if code.isalpha() else airline_iata
-        if not candidate_airline:
-            continue
-        candidate = f"{candidate_airline}{num}"
+        candidate = f"{code}{num}"
         if candidate not in seen_flights:
             seen_flights.append(candidate)
     if flight_num and flight_num not in seen_flights:

@@ -64,7 +64,7 @@ async function localEndpoint(config) {
   const path = (config.url || "").replace(config.baseURL || "", "").split("?")[0];
   const method = (config.method || "get").toLowerCase();
   const params = config.params || {};
-  const year = Number(params.year || new Date().getFullYear());
+  const year = params.year === "all" ? "all" : Number(params.year || new Date().getFullYear());
 
   if (path === "/auth/me" && method === "get") {
     return asResponse(config, { user: localUser(), profile: await getLocalProfile() });

@@ -92,6 +92,17 @@ export async function deleteFlightFromSupabase(flight) {
   if (error) console.warn("Ryoko Supabase delete sync failed", error);
 }
 
+export async function deleteAllSupabaseData() {
+  const userId = await currentUserId();
+  if (!userId) return;
+  const { error: flightsError } = await supabase.from("flights").delete().eq("user_id", userId);
+  if (flightsError) console.warn("Ryoko Supabase clear flights failed", flightsError);
+  const { error: artifactsError } = await supabase.from("ticket_artifacts").delete().eq("user_id", userId);
+  if (artifactsError) console.warn("Ryoko Supabase clear artifacts failed", artifactsError);
+  const { error: analyticsError } = await supabase.from("analytics_snapshots").delete().eq("user_id", userId);
+  if (analyticsError) console.warn("Ryoko Supabase clear analytics failed", analyticsError);
+}
+
 export async function pullSupabaseLedger() {
   const userId = await currentUserId();
   if (!userId) return null;

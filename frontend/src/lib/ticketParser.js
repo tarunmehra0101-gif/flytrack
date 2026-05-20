@@ -7,19 +7,78 @@ const MONTHS = {
   SEPTEMBER: 8, OCT: 9, OCTOBER: 9, NOV: 10, NOVEMBER: 10, DEC: 11, DECEMBER: 11,
 };
 
+const CITY_ALIASES = {
+  BENGALURU: "BLR", BANGALORE: "BLR", "BE N GALURU": "BLR", BENGAL: "BLR",
+  RANCHI: "IXR",
+  KOZHIKODE: "CCJ", CALICUT: "CCJ",
+  TRIVANDRUM: "TRV", THIRUVANANTHAPURAM: "TRV",
+  VIZAG: "VTZ", VISAKHAPATNAM: "VTZ",
+  VARANASI: "VNS", BANARAS: "VNS",
+  LUCKNOW: "LKO",
+  BHUBANESWAR: "BBI", BHUBANESHWAR: "BBI",
+  JAIPUR: "JAI",
+  CHANDIGARH: "IXC",
+  SRINAGAR: "SXR",
+  PATNA: "PAT",
+  MANGALORE: "IXE", MANGALURU: "IXE",
+  COIMBATORE: "CJB",
+  MADURAI: "IXM",
+  UDAIPUR: "UDR",
+  AMRITSAR: "ATQ",
+  NAGPUR: "NAG",
+  INDORE: "IDR",
+  RAIPUR: "RPR",
+  IMPHAL: "IMF",
+  GUWAHATI: "GAU",
+  AGARTALA: "IXA",
+  DEHRADUN: "DED",
+  BAGDOGRA: "IXB",
+  "PORT BLAIR": "IXZ",
+  TIRUPATI: "TIR",
+  VIJAYAWADA: "VGA",
+  MOPA: "GOX",
+  ISTANBUL: "IST",
+  "KUALA LUMPUR": "KUL",
+  "NEW YORK": "JFK",
+  "LOS ANGELES": "LAX",
+  "SAN FRANCISCO": "SFO",
+  CHICAGO: "ORD",
+};
+
 const AIRLINE_ALIASES = [
-  ["AIR INDIA", "AI"], ["INDIGO", "6E"], ["INTERGLOBE", "6E"], ["AKASA", "QP"],
-  ["SPICEJET", "SG"], ["VISTARA", "UK"], ["EMIRATES", "EK"], ["ETIHAD", "EY"],
-  ["QATAR", "QR"], ["SINGAPORE AIRLINES", "SQ"], ["BRITISH AIRWAYS", "BA"],
-  ["LUFTHANSA", "LH"], ["AIR FRANCE", "AF"], ["KLM", "KL"], ["CATHAY", "CX"],
-  ["THAI AIR", "TG"], ["TURKISH", "TK"], ["JAPAN AIR", "JL"], ["UNITED", "UA"],
-  ["AMERICAN AIR", "AA"], ["DELTA", "DL"], ["QANTAS", "QF"], ["SRILANKAN", "UL"],
-  ["MALAYSIA AIR", "MH"], ["AIR ASIA", "I5"], ["GO FIRST", "G8"], ["GO AIR", "G8"],
-  ["AIRINDIA", "AI"], ["AIR-INDIA", "AI"],
+  ["AIR INDIA EXPRESS", "IX"], ["AIRINDIA EXPRESS", "IX"], ["AIR-INDIA EXPRESS", "IX"],
+  ["AIR INDIA", "AI"], ["AIRINDIA", "AI"], ["AIR-INDIA", "AI"],
+  ["INDIGO", "6E"], ["INTERGLOBE", "6E"],
+  ["AKASA AIR", "QP"], ["AKASA", "QP"],
+  ["SPICEJET", "SG"], ["VISTARA", "UK"],
+  ["EMIRATES", "EK"], ["ETIHAD", "EY"], ["QATAR", "QR"],
+  ["SINGAPORE AIRLINES", "SQ"], ["BRITISH AIRWAYS", "BA"],
+  ["LUFTHANSA", "LH"], ["AIR FRANCE", "AF"], ["KLM", "KL"], ["SWISS", "LX"],
+  ["CATHAY", "CX"], ["THAI AIR", "TG"], ["TURKISH", "TK"],
+  ["JAPAN AIR", "JL"], ["UNITED", "UA"], ["AMERICAN AIR", "AA"],
+  ["DELTA", "DL"], ["QANTAS", "QF"], ["SRILANKAN", "UL"],
+  ["MALAYSIA AIR", "MH"], ["AIR ASIA", "I5"], ["AIRASIA", "I5"],
+  ["GO FIRST", "G8"], ["GO AIR", "G8"],
+  ["JETBLUE", "B6"], ["SOUTHWEST", "WN"],
+  ["VIRGIN ATLANTIC", "VS"], ["AIR CANADA", "AC"],
+  ["KOREAN AIR", "KE"], ["ANA", "NH"],
+  ["FLYDUBAI", "FZ"], ["OMAN AIR", "WY"], ["GULF AIR", "GF"],
 ];
 
 // All known 2-letter IATA airline codes for matching in text
-const AIRLINE_CODES_RE = "AI|6E|UK|SG|QP|EK|EY|QR|SQ|BA|LH|AF|KL|LX|CX|TG|TK|JL|NH|KE|UA|AA|DL|AC|QF|VS|I5|G8|MH|UL|IX|AK|FZ|WY|GF|9W|S7|AZ|IB|TP|SK|AY|LO|OS|RJ|PK|BG|FY|H9|WJ";
+// Auto-generated from AIRLINES + known regional carriers. Sorted longest-first so
+// two-char codes like "I5" don't shadow longer prefixes.
+const AIRLINE_CODES_RE = (() => {
+  const base = new Set([
+    "AI","6E","UK","SG","QP","EK","EY","QR","SQ","BA","LH","AF","KL","LX",
+    "CX","TG","TK","JL","NH","KE","UA","AA","DL","AC","QF","VS","I5","G8",
+    "MH","UL","IX","AK","FZ","WY","GF","9W","S7","AZ","IB","TP","SK","AY",
+    "LO","OS","RJ","PK","BG","FY","H9","WJ","B6","WN","FR","W6","U2","EI",
+    "SU","HU","CA","MU","CZ","3U","SC","ZH","FM","CI","BR","GA","SV","WE",
+    ...Object.keys(AIRLINES),
+  ]);
+  return [...base].sort((a, b) => b.length - a.length).join("|");
+})();
 
 const BLACKLISTED_3LETTER_WORDS = new Set([
   // Travel & document terms
@@ -164,15 +223,7 @@ function airportFromLabel(value) {
   const direct = normalizeAirport(label);
   if (direct) return direct;
 
-  const aliases = {
-    BENGALURU: "BLR",
-    "BE N GALURU": "BLR",
-    BANGALORE: "BLR",
-    RANCHI: "IXR",
-    KOZHIKODE: "CCJ",
-    CALICUT: "CCJ",
-  };
-  for (const [name, code] of Object.entries(aliases)) {
+  for (const [name, code] of Object.entries(CITY_ALIASES)) {
     if (label.includes(name)) return code;
   }
 
@@ -193,15 +244,18 @@ function airportFromLabel(value) {
   return contained?.iata || null;
 }
 
-/** Parse time from text like "14:30", "2:30 PM", "1430" */
+/** Parse time from text like "14:30", "2:30 PM", "1430", "16.45 hrs" */
 function parseTime(text) {
   if (!text) return null;
-  const hm = text.match(/\b(\d{1,2})[:.h](\d{2})\s*(AM|PM)?\b/i);
+  // Match "16.45 hrs", "17:25", "2:30 PM", "14.30", "16:45hrs" etc.
+  const hm = text.match(/\b(\d{1,2})[:.](\d{2})\s*(?:HRS?)?\s*,?\s*(AM|PM)?\b/i);
   if (hm) {
     let h = parseInt(hm[1]), m = parseInt(hm[2]);
     if (hm[3]?.toUpperCase() === "PM" && h < 12) h += 12;
     if (hm[3]?.toUpperCase() === "AM" && h === 12) h = 0;
-    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+    if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+      return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+    }
   }
   const military = text.match(/\b([01]\d|2[0-3])(\d{2})\s*(?:HRS?|H)?\b/);
   if (military) return `${military[1]}:${military[2]}`;
@@ -209,13 +263,26 @@ function parseTime(text) {
 }
 
 function findTimes(text, index) {
-  const window = text.slice(Math.max(0, index - 100), index + 400);
+  const window = text.slice(Math.max(0, index - 150), index + 500);
   let depTime = null, arrTime = null;
-  // Try labeled times first
-  const depMatch = window.match(/\b(?:DEP(?:ARTURE)?|STD|SCHED(?:ULED)?\s*DEP(?:ARTURE)?)\s*(?:TIME)?\s*[:#\-]?\s*(\d{1,2}[:.h]\d{2}\s*(?:AM|PM)?|\d{4}\s*(?:HRS?)?)\b/i);
-  if (depMatch) depTime = parseTime(depMatch[1]);
-  const arrMatch = window.match(/\b(?:ARR(?:IVAL)?|STA|SCHED(?:ULED)?\s*ARR(?:IVAL)?)\s*(?:TIME)?\s*[:#\-]?\s*(\d{1,2}[:.h]\d{2}\s*(?:AM|PM)?|\d{4}\s*(?:HRS?)?)\b/i);
-  if (arrMatch) arrTime = parseTime(arrMatch[1]);
+  // Try labeled times — handles Indian formats like "Departure Time 17.25 hrs, 11 Jun 25"
+  const depPatterns = [
+    /\b(?:DEPARTURE|DEP)\s*(?:TIME)?\s*[:#\-]?\s*(\d{1,2}[:.]\d{2}\s*(?:HRS?)?\s*,?\s*(?:AM|PM)?)/i,
+    /\b(?:STD|SCHED(?:ULED)?\s*DEP(?:ARTURE)?)\s*(?:TIME)?\s*[:#\-]?\s*(\d{1,2}[:.h]\d{2}\s*(?:AM|PM)?|\d{4}\s*(?:HRS?)?)/i,
+    /\bDEPARTS?\s*[:#\-]?\s*(\d{1,2}[:.h]\d{2}\s*(?:HRS?)?\s*,?\s*(?:AM|PM)?)/i,
+  ];
+  for (const pat of depPatterns) {
+    const match = window.match(pat);
+    if (match) { depTime = parseTime(match[1]); if (depTime) break; }
+  }
+  const arrPatterns = [
+    /\b(?:ARRIVAL|ARR)\s*(?:TIME)?\s*[:#\-]?\s*(\d{1,2}[:.]\d{2}\s*(?:HRS?)?\s*,?\s*(?:AM|PM)?)/i,
+    /\b(?:STA|SCHED(?:ULED)?\s*ARR(?:IVAL)?)\s*(?:TIME)?\s*[:#\-]?\s*(\d{1,2}[:.h]\d{2}\s*(?:AM|PM)?|\d{4}\s*(?:HRS?)?)/i,
+  ];
+  for (const pat of arrPatterns) {
+    const match = window.match(pat);
+    if (match) { arrTime = parseTime(match[1]); if (arrTime) break; }
+  }
   return { departure_time: depTime, arrival_time: arrTime };
 }
 
@@ -278,25 +345,70 @@ function routeCandidates(text) {
       }
     }
   }
+
+  // Last resort fallback: Look for city names in text
+  if (candidates.length === 0) {
+    const foundCities = [];
+    const sortedAliases = Object.entries(CITY_ALIASES).sort((a, b) => b[0].length - a[0].length);
+    for (const [cityName, code] of sortedAliases) {
+      const idx = upper.indexOf(cityName);
+      if (idx !== -1) {
+        foundCities.push({ code, index: idx, name: cityName });
+      }
+    }
+    foundCities.sort((a, b) => a.index - b.index);
+    for (let i = 0; i < foundCities.length - 1; i++) {
+      for (let j = i + 1; j < foundCities.length; j++) {
+        if (foundCities[i].code !== foundCities[j].code) {
+          candidates.push({ from: foundCities[i].code, to: foundCities[j].code, index: foundCities[i].index });
+          return candidates;
+        }
+      }
+    }
+  }
+
   return candidates;
 }
 
 function flightMatches(text) {
   const upper = text.toUpperCase();
   const matches = [];
-  const flightRe = new RegExp(`\\b(?:FLIGHT(?:\\s*(?:NO|NUMBER|#))?\\s*[:#\\-]?\\s*)?((${AIRLINE_CODES_RE})\\s*[-~]?\\s*\\d{2,4}[A-Z]?)\\b`, "g");
+  const seen = new Set();
+
+  // Pattern 1: Standard "AI505" or "6E 7576" or "FLIGHT NO IX 2690"
+  const flightRe = new RegExp(`\\b(?:FLIGHT(?:\\s*(?:NO|NUMBER|#))?\\s*[:#\\-]?\\s*)?((${AIRLINE_CODES_RE})\\s*[-~]?\\s*\\d{1,5}[A-Z]?)\\b`, "g");
   let match;
   while ((match = flightRe.exec(upper))) {
     const code = match[1].replace(/[\s\-~]+/g, "");
-    matches.push({ code, airline: code.slice(0, 2), number: code.slice(2), index: match.index });
+    if (!seen.has(code)) {
+      seen.add(code);
+      const airline = match[2];
+      matches.push({ code, airline, number: code.slice(airline.length), index: match.index });
+    }
   }
+
+  // Pattern 2: "Flight No  IX 2690" — more generous spacing (handles PDF extraction artifacts)
+  if (!matches.length) {
+    const labeledRe = /\bFLIGHT\s*(?:NO|NUMBER|#)?\s*[:#\-]?\s*([A-Z0-9]{2})\s+(\d{1,5}[A-Z]?)\b/g;
+    while ((match = labeledRe.exec(upper))) {
+      const airline = match[1];
+      const num = match[2];
+      if (AIRLINES[airline] || airline.match(new RegExp(`^(?:${AIRLINE_CODES_RE})$`))) {
+        const code = `${airline}${num}`;
+        if (!seen.has(code)) {
+          seen.add(code);
+          matches.push({ code, airline, number: num, index: match.index });
+        }
+      }
+    }
+  }
+
   return matches;
 }
 
 function buildLocalSegments(text, sourceType) {
   const flights = flightMatches(text);
   const routes = routeCandidates(text);
-  if (!flights.length || !routes.length) return [];
 
   const passengerName = findPassenger(text);
   const pnr = findPnr(text);
@@ -304,55 +416,153 @@ function buildLocalSegments(text, sourceType) {
   const segments = [];
   const seen = new Set();
 
-  for (const flight of flights.slice(0, 6)) {
-    const route = routes
-      .slice()
-      .sort((a, b) => Math.abs(a.index - flight.index) - Math.abs(b.index - flight.index))[0];
-    if (!route) continue;
+  // Case 1: We have both flights and routes — the best case
+  if (flights.length && routes.length) {
+    for (const flight of flights.slice(0, 6)) {
+      const route = routes
+        .slice()
+        .sort((a, b) => Math.abs(a.index - flight.index) - Math.abs(b.index - flight.index))[0];
+      if (!route) continue;
 
-    const labeledDate = text.match(/\b(?:DEPARTURE|BOARDING|DATE)\s*(?:TIME)?\s*[:#\-]?\s*(?:\d{1,2}[:.h]\d{2}\s*(?:HRS?)?)?\s*[, ]+\s*(\d{1,2}\s+[A-Z]{3,9}\s+\d{2,4})\b/i)?.[1];
-    const flightDate = findDateNear(text, flight.index) || parseDate(labeledDate);
-    const airline = findAirline(text, flight.code) || flight.airline;
-    const smallFields = extractSmallFields(text, flight.index);
-    const key = `${flight.code}|${route.from}|${route.to}|${flightDate || ""}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
+      const labeledDate = text.match(/\b(?:DEPARTURE|BOARDING|DATE)\s*(?:TIME)?\s*[:#\-]?\s*(?:\d{1,2}[:.h]\d{2}\s*(?:HRS?)?)?\s*[, ]+\s*(\d{1,2}\s+[A-Z]{3,9}\s+\d{2,4})\b/i)?.[1];
+      const flightDate = findDateNear(text, flight.index) || parseDate(labeledDate);
+      const airline = findAirline(text, flight.code) || flight.airline;
+      const smallFields = extractSmallFields(text, flight.index);
+      const key = `${flight.code}|${route.from}|${route.to}|${flightDate || ""}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
 
-    const missing = [];
-    if (!flightDate) missing.push("flight_date");
+      const missing = [];
+      if (!flightDate) missing.push("flight_date");
 
-    segments.push({
-      source_type: sourceType,
-      sequence_index: segments.length,
-      airline_iata: airline,
-      airline_name: AIRLINES[airline] || airline,
-      flight_number: flight.code,
-      departure_airport_iata: route.from,
-      arrival_airport_iata: route.to,
-      departure_city_name: AIRPORTS[route.from]?.city || route.from,
-      arrival_city_name: AIRPORTS[route.to]?.city || route.to,
-      departure_time_local: smallFields.departure_time || null,
-      arrival_time_local: smallFields.arrival_time || null,
-      departure_date_local: flightDate,
-      flight_date: flightDate,
-      seat_number: smallFields.seat || null,
-      cabin_class: smallFields.cabin || null,
-      terminal_departure: smallFields.terminal || null,
-      gate: smallFields.gate || null,
-      ticket_number: ticketNumber,
-      pnr,
-      booking_reference: pnr,
-      passenger_name: passengerName,
-      parser_rule: "local_text_fallback",
-      confidence_score: missing.length ? 0.68 : 0.82,
-      confidence: missing.length ? "review" : "medium",
-      missing_fields: missing,
-      needs_review: true,
-      status: "pending_review",
-      parse_message: missing.length
-        ? "We found a likely flight route, but the date needs review."
-        : "We found likely flight details from the PDF text. Please review before saving.",
-    });
+      segments.push({
+        source_type: sourceType,
+        sequence_index: segments.length,
+        airline_iata: airline,
+        airline_name: AIRLINES[airline] || airline,
+        flight_number: flight.code,
+        departure_airport_iata: route.from,
+        arrival_airport_iata: route.to,
+        departure_city_name: AIRPORTS[route.from]?.city || route.from,
+        arrival_city_name: AIRPORTS[route.to]?.city || route.to,
+        departure_time_local: smallFields.departure_time || null,
+        arrival_time_local: smallFields.arrival_time || null,
+        departure_date_local: flightDate,
+        flight_date: flightDate,
+        seat_number: smallFields.seat || null,
+        cabin_class: smallFields.cabin || null,
+        terminal_departure: smallFields.terminal || null,
+        gate: smallFields.gate || null,
+        ticket_number: ticketNumber,
+        pnr,
+        booking_reference: pnr,
+        passenger_name: passengerName,
+        parser_rule: "local_text_fallback",
+        confidence_score: missing.length ? 0.68 : 0.82,
+        confidence: missing.length ? "review" : "medium",
+        missing_fields: missing,
+        needs_review: true,
+        status: "pending_review",
+        parse_message: missing.length
+          ? "We found a likely flight route, but the date needs review."
+          : "We found likely flight details from the PDF text. Please review before saving.",
+      });
+    }
+  }
+
+  // Case 2: We have routes but no flight numbers — still useful, create reviewable segments
+  if (!segments.length && routes.length) {
+    const globalDate = parseDate(text);
+    for (const route of routes.slice(0, 3)) {
+      const flightDate = findDateNear(text, route.index) || globalDate;
+      const airline = findAirline(text, null);
+      const smallFields = extractSmallFields(text, route.index);
+      const key = `${route.from}|${route.to}|${flightDate || ""}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      const missing = ["flight_number"];
+      if (!flightDate) missing.push("flight_date");
+      if (!airline) missing.push("airline_iata");
+
+      segments.push({
+        source_type: sourceType,
+        sequence_index: segments.length,
+        airline_iata: airline || null,
+        airline_name: airline ? (AIRLINES[airline] || airline) : null,
+        flight_number: null,
+        departure_airport_iata: route.from,
+        arrival_airport_iata: route.to,
+        departure_city_name: AIRPORTS[route.from]?.city || route.from,
+        arrival_city_name: AIRPORTS[route.to]?.city || route.to,
+        departure_time_local: smallFields.departure_time || null,
+        arrival_time_local: smallFields.arrival_time || null,
+        departure_date_local: flightDate,
+        flight_date: flightDate,
+        seat_number: smallFields.seat || null,
+        cabin_class: smallFields.cabin || null,
+        terminal_departure: smallFields.terminal || null,
+        gate: smallFields.gate || null,
+        ticket_number: ticketNumber,
+        pnr,
+        booking_reference: pnr,
+        passenger_name: passengerName,
+        parser_rule: "local_route_only",
+        confidence_score: 0.55,
+        confidence: "review",
+        missing_fields: missing,
+        needs_review: true,
+        status: "pending_review",
+        parse_message: "We found the route but not the flight number. Please fill in the details.",
+      });
+    }
+  }
+
+  // Case 3: We have flights but no routes — less common, try to find airports from airline lookup
+  if (!segments.length && flights.length) {
+    const globalDate = parseDate(text);
+    for (const flight of flights.slice(0, 3)) {
+      const flightDate = findDateNear(text, flight.index) || globalDate;
+      const airline = findAirline(text, flight.code) || flight.airline;
+      const smallFields = extractSmallFields(text, flight.index);
+      const key = `${flight.code}|${flightDate || ""}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      const missing = ["departure_airport_iata", "arrival_airport_iata"];
+      if (!flightDate) missing.push("flight_date");
+
+      segments.push({
+        source_type: sourceType,
+        sequence_index: segments.length,
+        airline_iata: airline,
+        airline_name: AIRLINES[airline] || airline,
+        flight_number: flight.code,
+        departure_airport_iata: null,
+        arrival_airport_iata: null,
+        departure_city_name: null,
+        arrival_city_name: null,
+        departure_time_local: smallFields.departure_time || null,
+        arrival_time_local: smallFields.arrival_time || null,
+        departure_date_local: flightDate,
+        flight_date: flightDate,
+        seat_number: smallFields.seat || null,
+        cabin_class: smallFields.cabin || null,
+        terminal_departure: smallFields.terminal || null,
+        gate: smallFields.gate || null,
+        ticket_number: ticketNumber,
+        pnr,
+        booking_reference: pnr,
+        passenger_name: passengerName,
+        parser_rule: "local_flight_only",
+        confidence_score: 0.45,
+        confidence: "review",
+        missing_fields: missing,
+        needs_review: true,
+        status: "pending_review",
+        parse_message: "We found the flight number but not the airports. Please fill in the route.",
+      });
+    }
   }
 
   return segments;

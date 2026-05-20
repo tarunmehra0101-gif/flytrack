@@ -3,7 +3,7 @@ import { AIRLINES, AIRPORTS } from "@/data/airports";
 import { lookupCatalogFlight, searchFlightCatalog } from "@/data/flightCatalog";
 import { parseTicketText } from "@/lib/ticketParser";
 import { extractPdfText } from "@/lib/ticketText";
-import { deleteFlightFromSupabase, pushFlightToSupabase } from "@/lib/supabaseSync";
+import { deleteFlightFromSupabase, pushFlightToSupabase, deleteAllSupabaseData } from "@/lib/supabaseSync";
 
 const DB_NAME = "ryoko_local_ledger";
 const DB_VERSION = 1;
@@ -976,6 +976,11 @@ export async function importLedger(payload) {
 
 export async function deleteAllLocalData() {
   await Promise.all(STORE_NAMES.map((store) => clear(store)));
+  try {
+    await deleteAllSupabaseData();
+  } catch (err) {
+    console.warn("Failed to delete all Supabase data:", err);
+  }
   await getLocalProfile();
   await markDirty();
 }

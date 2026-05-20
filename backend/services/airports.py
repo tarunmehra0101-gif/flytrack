@@ -46,6 +46,8 @@ CURATED_AIRPORTS: dict[str, dict] = {
     "ATQ": {"iata": "ATQ", "name": "Sri Guru Ram Dass Jee Intl", "city": "Amritsar", "country": "IN", "lat": 31.7096, "lng": 74.7973, "tz": "Asia/Kolkata"},
     "UDR": {"iata": "UDR", "name": "Maharana Pratap", "city": "Udaipur", "country": "IN", "lat": 24.6177, "lng": 73.8961, "tz": "Asia/Kolkata"},
     "IXZ": {"iata": "IXZ", "name": "Veer Savarkar Intl", "city": "Port Blair", "country": "IN", "lat": 11.6412, "lng": 92.7297, "tz": "Asia/Kolkata"},
+    "IXR": {"iata": "IXR", "name": "Birsa Munda", "city": "Ranchi", "country": "IN", "lat": 23.3142, "lng": 85.3218, "tz": "Asia/Kolkata"},
+    "CCJ": {"iata": "CCJ", "name": "Calicut Intl", "city": "Kozhikode", "country": "IN", "lat": 11.1368, "lng": 75.9553, "tz": "Asia/Kolkata"},
     # Middle East
     "DXB": {"iata": "DXB", "name": "Dubai Intl", "city": "Dubai", "country": "AE", "lat": 25.2532, "lng": 55.3657, "tz": "Asia/Dubai"},
     "AUH": {"iata": "AUH", "name": "Abu Dhabi Intl", "city": "Abu Dhabi", "country": "AE", "lat": 24.4330, "lng": 54.6511, "tz": "Asia/Dubai"},
