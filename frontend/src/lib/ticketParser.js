@@ -618,6 +618,39 @@ export async function parseTicketText(rawText, sourceType = "pdf_eticket") {
       const flight = data.flights[i];
       if (flight.passenger_name) passenger_name = flight.passenger_name;
       
+      // Validation to filter out mock/hallucinated flights returned by the Edge function.
+      // A flight must have its flight number digits present in the squashed text,
+      // and its departure/arrival airport codes (or corresponding city names) must also be present.
+      const flightNum = flight.flight_number || "";
+      const digits = flightNum.replace(/\D/g, "");
+      const departureCode = (flight.departure_airport_iata || "").toUpperCase();
+      const arrivalCode = (flight.arrival_airport_iata || "").toUpperCase();
+      
+      const upperText = text.toUpperCase();
+      const textNoSpaces = upperText.replace(/\s/g, "");
+      
+      let isValid = true;
+      if (digits && !textNoSpaces.includes(digits)) {
+        isValid = false;
+      }
+      if (departureCode && !upperText.includes(departureCode)) {
+        const depCity = (AIRPORTS[departureCode]?.city || "").toUpperCase();
+        if (!depCity || !upperText.includes(depCity)) {
+          isValid = false;
+        }
+      }
+      if (arrivalCode && !upperText.includes(arrivalCode)) {
+        const arrCity = (AIRPORTS[arrivalCode]?.city || "").toUpperCase();
+        if (!arrCity || !upperText.includes(arrCity)) {
+          isValid = false;
+        }
+      }
+      
+      if (!isValid) {
+        console.warn(`AI parser returned flight ${flightNum} (${departureCode}->${arrivalCode}) which is not validated in raw text`);
+        continue;
+      }
+      
       const missing = [];
       if (!flight.flight_number) missing.push("flight_number");
       if (!flight.departure_airport_iata) missing.push("departure_airport_iata");

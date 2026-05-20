@@ -47,6 +47,30 @@ TIME_RE = re.compile(r"\b(\d{1,2}):(\d{2})\s*(AM|PM)?\b", re.IGNORECASE)
 IATA_PAIR_RE = re.compile(r"\b([A-Z]{3})\s*(?:→|->|-|to|–|—|\s)\s*([A-Z]{3})\b")
 SEAT_RE = re.compile(r"\bSeat(?:\s*No\.?)?\s*[:\-]?\s*([0-9]{1,3}[A-Z])\b", re.IGNORECASE)
 
+BLACKLISTED_3LETTER_WORDS = {
+    # Travel & document terms
+    "TAX", "GST", "VAT", "NET", "PAY", "BAG", "CAR", "VAL", "NON", "VIA", "PNR", "PAX", "REF", "TKT", 
+    "FLT", "SEQ", "NUM", "NBR", "CAB", "CLS", "MIN", "HRS", "SEC", "GMT", "UTC", "EST", "PST", "MST", 
+    "CST", "EDT", "PDT", "CDT", "MDT", "BST", "DEP", "ARR", "STD", "STA", "WEB", "OFF", "OWN", "ANY", 
+    "GET", "HAD", "ITS",
+    # Months
+    "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
+    # Days
+    "MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN",
+    # Currencies
+    "INR", "USD", "EUR", "CAD", "GBP", "AED", "SAR", "SGD", "AUD", "JPY",
+    # Common English words / prepositions
+    "THE", "AND", "FOR", "NOT", "ARE", "BUT", "YOU", "ALL", "CAN", "HER", "WAS", "ONE", "OUR", "OUT", 
+    "HAS", "HIS", "HOW", "MAN", "NEW", "NOW", "OLD", "SEE", "WAY", "WHO", "BOY", "DID", "LET", "PUT", 
+    "SAY", "SHE", "TOO", "USE", "YES", "SET", "ADD", "BOX", "END", "KEY", "LOC", "ROW", "RUN", "SUB", 
+    "TRY", "ZIP"
+}
+
+BLACKLISTED_2LETTER_WORDS = {
+    "AM", "AN", "AS", "AT", "BE", "BY", "DO", "GO", "HE", "IF", "IN", "IS", "IT", 
+    "ME", "MY", "NO", "OF", "ON", "OR", "SO", "TO", "UP", "US", "WE"
+}
+
 
 def _extract_pdf_text(pdf_bytes: bytes) -> str:
     try:
@@ -89,12 +113,13 @@ def _find_airports(text: str) -> tuple[Optional[str], Optional[str]]:
     if m:
         a, b = m.group(1), m.group(2)
         if a in AIRPORTS and b in AIRPORTS:
-            return a, b
+            if a not in BLACKLISTED_3LETTER_WORDS and b not in BLACKLISTED_3LETTER_WORDS:
+                return a, b
     # Otherwise collect IATA candidates in order, pick first two that exist in our seed
     candidates = re.findall(r"\b([A-Z]{3})\b", text)
     hits: list[str] = []
     for c in candidates:
-        if c in AIRPORTS and c not in hits:
+        if c in AIRPORTS and c not in hits and c not in BLACKLISTED_3LETTER_WORDS:
             hits.append(c)
         if len(hits) >= 2:
             break
@@ -104,6 +129,8 @@ def _find_airports(text: str) -> tuple[Optional[str], Optional[str]]:
     city_hits: list[str] = []
     upper = text.upper()
     for code, row in AIRPORTS.items():
+        if code in BLACKLISTED_3LETTER_WORDS:
+            continue
         if row["city"].upper() in upper and code not in city_hits:
             city_hits.append(code)
         if len(city_hits) >= 2:
@@ -144,7 +171,7 @@ def parse_pdf_ticket(pdf_bytes: bytes) -> dict:
         m = FLIGHT_NUM_RE.search(text)
         if m:
             candidate_iata = m.group(1).upper()
-            if lookup_airline(candidate_iata) or candidate_iata.isalpha():
+            if lookup_airline(candidate_iata) or (candidate_iata.isalpha() and candidate_iata not in BLACKLISTED_2LETTER_WORDS):
                 airline_iata = airline_iata or candidate_iata
                 flight_raw = m.group(2)
                 flight_num = f"{airline_iata}{flight_raw}"
@@ -191,15 +218,17 @@ def parse_pdf_ticket(pdf_bytes: bytes) -> dict:
     for m in IATA_PAIR_RE.finditer(text):
         a, b = m.group(1), m.group(2)
         if a in AIRPORTS and b in AIRPORTS:
-            route_pairs.append((a, b))
+            if a not in BLACKLISTED_3LETTER_WORDS and b not in BLACKLISTED_3LETTER_WORDS:
+                route_pairs.append((a, b))
     if not route_pairs and from_iata and to_iata:
         route_pairs.append((from_iata, to_iata))
 
     seen_flights = []
     for m in FLIGHT_NUM_RE.finditer(text):
         code, num = m.group(1).upper(), m.group(2)
-        if not lookup_airline(code) and not code.isalpha():
-            continue
+        if not lookup_airline(code):
+            if code in BLACKLISTED_2LETTER_WORDS or not code.isalpha():
+                continue
         candidate = f"{code}{num}"
         if candidate not in seen_flights:
             seen_flights.append(candidate)
