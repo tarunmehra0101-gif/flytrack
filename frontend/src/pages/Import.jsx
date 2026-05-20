@@ -77,6 +77,7 @@ export default function Import() {
   const imgRef = useRef(null);
   const pdfRef = useRef(null);
   const [status, setStatus] = useState("idle"); // idle | reading | looking_up | preview | error
+  const [uploadType, setUploadType] = useState(null); // null | "image" | "pdf"
   const [error, setError] = useState(null);
   const [preview, setPreview] = useState(null);
   const [history, setHistory] = useState([]);
@@ -179,6 +180,7 @@ export default function Import() {
     const list = Array.from(files || []);
     if (!list.length) return;
     setError(null);
+    setUploadType("image");
     setStatus("reading");
     try {
       const results = [];
@@ -211,10 +213,12 @@ export default function Import() {
       }
       setPreview(mergeImportResults(results));
       setStatus("preview");
+      setUploadType(null);
       loadHistory();
     } catch (e) {
       setError(e?.response?.data?.detail || e?.message || "Couldn't read the boarding pass. Try a clearer photo or paste the code below.");
       setStatus("error");
+      setUploadType(null);
     }
   };
 
@@ -222,6 +226,7 @@ export default function Import() {
     const list = Array.from(files || []);
     if (!list.length) return;
     setError(null);
+    setUploadType("pdf");
     setStatus("reading");
     try {
       const results = [];
@@ -239,12 +244,14 @@ export default function Import() {
         setPreview(null);
         setError(merged.parse_message || "No flight details were found in this PDF. Try a clearer ticket or add the flight manually.");
         setStatus("error");
+        setUploadType(null);
         loadHistory();
         toast.info("No flight details found in this PDF.");
         return;
       }
       setPreview(merged);
       setStatus("preview");
+      setUploadType(null);
       loadHistory();
       if (merged.segments.some((s) => (s.confidence_score ?? 0) < 0.6 || (s.missing_fields || []).length > 0)) {
         toast.info("Found some flight details. A quick review makes it perfect.");
@@ -252,6 +259,7 @@ export default function Import() {
     } catch (e) {
       setError(e?.response?.data?.detail || "Couldn't read that PDF. Try uploading a cleaner ticket.");
       setStatus("error");
+      setUploadType(null);
     }
   };
 
@@ -366,6 +374,8 @@ export default function Import() {
   };
 
   const isBusy = status === "reading" || status === "looking_up";
+  const isImageBusy = isBusy && uploadType === "image";
+  const isPdfBusy = isBusy && uploadType === "pdf";
   const previewSegments = preview?.segments || (preview?.segment ? [preview.segment] : []);
 
   const selectCatalogFlight = (flight) => {
@@ -461,7 +471,7 @@ export default function Import() {
               data-testid="file-input"
               onChange={(e) => handleImages(e.target.files)}
             />
-            {isBusy ? (
+            {isImageBusy ? (
               <div className="flex flex-col items-center gap-2">
                 <Loader2 className="w-8 h-8 text-primary animate-spin" />
                 <p className="text-xs font-medium">{status === "reading" ? "Reading…" : "Looking up…"}</p>
@@ -483,11 +493,22 @@ export default function Import() {
         {/* Secondary actions */}
         <div className="grid grid-cols-2 gap-2 text-xs">
           <button
-            onClick={() => pdfRef.current?.click()}
-            className="tl-card tl-card-interactive p-3 flex items-center justify-center gap-2 hover:border-primary/50 transition"
+            onClick={() => !isBusy && pdfRef.current?.click()}
+            disabled={isBusy}
+            className="tl-card tl-card-interactive p-3 flex items-center justify-center gap-2 hover:border-primary/50 transition disabled:opacity-50"
             data-testid="upload-pdf-btn"
           >
-            <FileText size={14} /> <span className="font-medium">Got an e-ticket?</span>
+            {isPdfBusy ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />
+                <span className="font-medium">{status === "reading" ? "Reading PDF…" : "Parsing PDF…"}</span>
+              </>
+            ) : (
+              <>
+                <FileText size={14} />
+                <span className="font-medium">Got an e-ticket?</span>
+              </>
+            )}
           </button>
           <input
             ref={pdfRef}

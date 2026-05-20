@@ -21,6 +21,25 @@ const AIRLINE_ALIASES = [
 // All known 2-letter IATA airline codes for matching in text
 const AIRLINE_CODES_RE = "AI|6E|UK|SG|QP|EK|EY|QR|SQ|BA|LH|AF|KL|LX|CX|TG|TK|JL|NH|KE|UA|AA|DL|AC|QF|VS|I5|G8|MH|UL|IX|AK|FZ|WY|GF|9W|S7|AZ|IB|TP|SK|AY|LO|OS|RJ|PK|BG|FY|H9|WJ";
 
+const BLACKLISTED_3LETTER_WORDS = new Set([
+  // Travel & document terms
+  "TAX", "GST", "VAT", "NET", "PAY", "BAG", "CAR", "VAL", "NON", "VIA", "PNR", "PAX", "REF", "TKT", 
+  "FLT", "SEQ", "NUM", "NBR", "CAB", "CLS", "MIN", "HRS", "SEC", "GMT", "UTC", "EST", "PST", "MST", 
+  "CST", "EDT", "PDT", "CDT", "MDT", "BST", "DEP", "ARR", "STD", "STA", "WEB", "OFF", "OWN", "ANY", 
+  "GET", "HAD", "ITS",
+  // Months
+  "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
+  // Days
+  "MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN",
+  // Currencies
+  "INR", "USD", "EUR", "CAD", "GBP", "AED", "SAR", "SGD", "AUD", "JPY",
+  // Common English words / prepositions
+  "THE", "AND", "FOR", "NOT", "ARE", "BUT", "YOU", "ALL", "CAN", "HER", "WAS", "ONE", "OUR", "OUT", 
+  "HAS", "HIS", "HOW", "MAN", "NEW", "NOW", "OLD", "SEE", "WAY", "WHO", "BOY", "DID", "LET", "PUT", 
+  "SAY", "SHE", "TOO", "USE", "YES", "SET", "ADD", "BOX", "END", "KEY", "LOC", "ROW", "RUN", "SUB", 
+  "TRY", "ZIP"
+]);
+
 function squash(text) {
   return String(text || "")
     .replace(/[→➜⟶⮕►▸]/g, " TO ")
@@ -88,7 +107,7 @@ function parseDate(value) {
 
 function extractAfter(text, labels, max = 42) {
   for (const label of labels) {
-    const re = new RegExp(`${label}\\s*[:#\\-]?\\s*([A-Z][A-Z\\s/.'-]{2,${max}})`, "i");
+    const re = new RegExp(`\\b${label}\\b\\s*[:#\\-]?\\s*([A-Z][A-Z\\s/.'-]{2,${max}})`, "i");
     const match = text.match(re);
     if (match?.[1]) {
       return match[1]
@@ -101,7 +120,7 @@ function extractAfter(text, labels, max = 42) {
 
 function findPassenger(text) {
   const labeled = normalizeName(extractAfter(text, [
-    "PASSENGER NAME", "PASSENGER", "TRAVELLER", "TRAVELER", "GUEST",
+    "PASSENGER NAME", "BOARDING PASS", "PASSENGER", "TRAVELLER", "TRAVELER", "GUEST",
     "NAME OF PASSENGER", "PAX NAME", "PSGR", "NAME",
   ]));
   if (labeled) return labeled;
@@ -206,7 +225,10 @@ function routeCandidates(text) {
   const pushCandidate = (fromValue, toValue, index) => {
     const from = normalizeAirport(fromValue) || airportFromLabel(fromValue);
     const to = normalizeAirport(toValue) || airportFromLabel(toValue);
-    if (from && to && from !== to) candidates.push({ from, to, index });
+    if (from && to && from !== to) {
+      if (BLACKLISTED_3LETTER_WORDS.has(from) || BLACKLISTED_3LETTER_WORDS.has(to)) return;
+      candidates.push({ from, to, index });
+    }
   };
   const patterns = [
     // Standard: DEL-BOM, DEL TO BOM, DEL > BOM
@@ -216,7 +238,7 @@ function routeCandidates(text) {
     // Origin/Destination labels
     /\b(?:ORIGIN|DEPARTURE|DEP)\s*[:#\-]?\s*([A-Z]{3})\b.{0,100}?\b(?:DESTINATION|ARRIVAL|ARR)\s*[:#\-]?\s*([A-Z]{3})\b/g,
     // Airport field labels on e-tickets
-    /\b(?:BOARDING|DEPARTS?)\s*(?:FROM|AT)?\s*[:#\-]?\s*\w*\s*\(([A-Z]{3})\).{0,120}?\b(?:ARRIVES?|TO)\s*(?:AT|IN)?\s*[:#\-]?\s*\w*\s*\(([A-Z]{3})\)/g,
+    /\b(?:BOARDING|DEPARTS?)\s*(?:FROM|AT)?\s*[:#\-]?\s*\w*\s*\(([A-Z]{3})\).{0,250}?\b(?:ARRIVES?|TO)\s*(?:AT|IN)?\s*[:#\-]?\s*\w*\s*\(([A-Z]{3})\)/g,
   ];
   patterns.forEach((pattern) => {
     let match;
@@ -226,7 +248,7 @@ function routeCandidates(text) {
   });
 
   const parenRoutes = [
-    /\bDEPART\s+([A-Z0-9\s.'-]{2,60})\(([A-Z]{3})\).{0,180}?\bARRIVE\s+([A-Z0-9\s.'-]{2,60})\(([A-Z]{3})\)/g,
+    /\bDEPART\s+([A-Z0-9\s.'-]{2,60})\(([A-Z]{3})\).{0,250}?\bARRIVE\s+([A-Z0-9\s.'-]{2,60})\(([A-Z]{3})\)/g,
     /\b([A-Z][A-Z\s.'-]{2,50})\s*\((?:-|[A-Z]{3})\)\s+TO\s+([A-Z]{3}|[A-Z][A-Z\s.'-]{2,50})\s*\((?:T\d|TERMINAL\s*\d|[A-Z]{3}|-)\)/g,
   ];
   parenRoutes.forEach((pattern) => {
@@ -242,7 +264,7 @@ function routeCandidates(text) {
     const codeRe = /\b([A-Z]{3})\b/g;
     let m;
     while ((m = codeRe.exec(upper))) {
-      if (AIRPORTS[m[1]] && !["THE", "AND", "FOR", "NOT", "ARE", "BUT", "YOU", "ALL", "CAN", "HER", "WAS", "ONE", "OUR", "OUT", "HAS", "HIS", "HOW", "MAN", "NEW", "NOW", "OLD", "SEE", "WAY", "WHO", "BOY", "DID", "ITS", "LET", "PUT", "SAY", "SHE", "TOO", "USE"].includes(m[1])) {
+      if (AIRPORTS[m[1]] && !BLACKLISTED_3LETTER_WORDS.has(m[1])) {
         codes.push({ code: m[1], index: m.index });
       }
     }
@@ -341,7 +363,14 @@ function extractSmallFields(text, index) {
   const seat = window.match(/\b(?:SEAT)(?:\s*(?:NO|NUMBER))?\s*[:#\-]?\s*([0-9]{1,2}[A-Z]?)\b/i)?.[1] || null;
   const cabin = window.match(/\b(?:CABIN|CLASS|TRAVEL CLASS)\s*[:#\-]?\s*(ECONOMY|BUSINESS|FIRST|PREMIUM\s*ECONOMY|Y|J|F|C|W)\b/i)?.[1] || null;
   const terminal = window.match(/\b(?:TERMINAL|TERM)\s*[:#\-]?\s*([A-Z0-9]{1,3})\b/i)?.[1] || null;
-  const gate = window.match(/\b(?:GATE)\s*[:#\-]?\s*([A-Z0-9]{1,5})\b/i)?.[1] || null;
+  let gate = window.match(/\b(?:GATE)\s*[:#\-]?\s*([A-Z0-9]{1,5})\b/i)?.[1] || null;
+  if (gate) {
+    const gateUpper = gate.toUpperCase();
+    const badGates = ["IS", "TO", "AT", "OR", "ON", "BY", "IN", "OF", "FOR", "AND", "THE", "WILL", "CLOSE", "SUBJECT", "CHANGE", "BE", "AN", "ARE", "NOT", "BUT"];
+    if (badGates.includes(gateUpper)) {
+      gate = null;
+    }
+  }
   const times = findTimes(text, index);
   return { seat, cabin, terminal, gate, ...times };
 }
