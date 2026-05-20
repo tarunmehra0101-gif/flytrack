@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Plane, Clock4, Home as HomeIcon, Building2, Route, Trophy, Timer, Sparkles, CalendarDays,
-  PlusCircle, Map, ListTree, Globe2, ArrowRight, Mail, Camera, MapPin, FileText
+  PlusCircle, Map, ListTree, Globe2, ArrowRight, Camera, MapPin, FileText
 } from "lucide-react";
 import { motion } from "framer-motion";
 import {
@@ -13,7 +13,7 @@ import Shell from "@/components/shell/Shell";
 import CountUp from "@/components/CountUp";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import FlightMap from "@/components/FlightMap";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -516,9 +516,9 @@ export default function Home() {
               <div className="grid grid-cols-1 gap-3">
                 <InsightVisualCard title="Above the clouds" metric={`${Math.round(data.total_air_hours || 0)}h`} detail={data.insights[0]} icon={Plane} tone="emerald" />
                 <InsightVisualCard title="Home gravity" metric={`${Math.round(data.home_days || 0)}d`} detail={data.insights[1] || `${profile?.home_city_name || "Home"} anchors your year.`} icon={HomeIcon} tone="gold" />
-                <InsightVisualCard title="Airport time" metric={`${Math.round(data.airport_hours || 0)}h`} detail={data.insights[3] || "Airport time is tracked as an estimate until exact check-in data is available."} icon={Timer} tone="sky" />
+                <InsightVisualCard title="Airport time" metric={`${Math.round(data.airport_hours || 0)}h`} detail={data.insights[2] || "Airport time is tracked as an estimate until exact check-in data is available."} icon={Timer} tone="sky" />
                 {data.top_route && <InsightVisualCard title="Route loop" metric={data.top_route} detail={`${data.top_route_count} flights on your most repeated route.`} icon={Route} tone="violet" />}
-                {data.insights[4] && <InsightVisualCard title="Travel rhythm" detail={data.insights[4]} icon={Trophy} tone="rose" />}
+                {data.insights[3] && <InsightVisualCard title="Travel rhythm" detail={data.insights[3]} icon={Trophy} tone="rose" />}
               </div>
             </div>
           )}
@@ -528,6 +528,7 @@ export default function Home() {
         <DialogContent className="max-w-[400px]">
           <DialogHeader>
             <DialogTitle>{detail === "route" ? "Route breakdown" : "Airline history"}</DialogTitle>
+            <DialogDescription>Your most frequent {detail === "route" ? "routes" : "airlines"} by number of flights.</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-2">
             {(detail === "route" ? (data?.route_frequency || []) : (data?.airline_split || [])).slice(0, 8).map((row, idx) => (

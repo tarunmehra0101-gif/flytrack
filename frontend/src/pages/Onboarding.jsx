@@ -17,7 +17,7 @@ export default function Onboarding() {
   const [homeAirport, setHomeAirport] = useState(
     profile?.home_airport_iata ? { iata: profile.home_airport_iata, city: profile.home_city_name } : null
   );
-  const [travelType, setTravelType] = useState(profile?.travel_profile_type || "frequent_flyer");
+  const [travelType, setTravelType] = useState(profile?.travel_profile_type || "frequent_traveler");
   const [submitting, setSubmitting] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const profileSavedRef = useRef(false);

@@ -228,7 +228,7 @@ const rows = [
   ["6E", "5312", "DEL", "IXB", 130, "Airbus A320neo", "11:00"],
   ["SG", "8709", "BOM", "DEL", 135, "Boeing 737 MAX 8", "19:00"],
   ["QP", "1314", "DEL", "AMD", 95, "Boeing 737 MAX 8", "16:50"],
-  ["AI", "803", "BLR", "DEL", 170, "Airbus A321neo", "06:10"],
+  ["AI", "804", "BLR", "DEL", 170, "Airbus A321neo", "06:10"],
   ["6E", "6111", "CCU", "BLR", 155, "Airbus A321neo", "21:00"],
   ["UK", "945", "DEL", "BOM", 130, "Airbus A321neo", "10:40"],
   ["UK", "996", "BOM", "DEL", 135, "Boeing 787-9", "22:30"],

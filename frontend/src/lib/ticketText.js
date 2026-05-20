@@ -43,7 +43,7 @@ export async function ocrImageFile(file) {
   const { createWorker } = await import("tesseract.js");
   const worker = await createWorker("eng", 1, {
     workerPath: "https://unpkg.com/tesseract.js@7.0.0/dist/worker.min.js",
-    corePath: "https://unpkg.com/tesseract.js-core@5.0.0",
+    corePath: "https://unpkg.com/tesseract.js-core@7.0.0",
   });
   try {
     const result = await worker.recognize(file);

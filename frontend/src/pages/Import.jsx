@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import {
   Camera, Loader2, AlertTriangle, CheckCircle2,
   PenLine, History, FileText, Sparkles, X, Clock,
-  Search, PlaneTakeoff, Plane, Radar, MailCheck, Video,
+  PlaneTakeoff, Video,
 } from "lucide-react";
 import Shell from "@/components/shell/Shell";
 import BoardingPassCard from "@/components/BoardingPassCard";
@@ -73,7 +73,7 @@ export default function Import() {
   const navigate = useNavigate();
   const location = new URLSearchParams(window.location.search);
   const isOnboarding = location.get("onboarding") === "true";
-  const { fetchMe, loginMock, supabaseEnabled } = useAuth();
+  useAuth();
   const imgRef = useRef(null);
   const pdfRef = useRef(null);
   const [status, setStatus] = useState("idle"); // idle | reading | looking_up | preview | error
@@ -259,6 +259,7 @@ export default function Import() {
 
   const handleBarcodePaste = async () => {
     if (!pasteText.trim()) return;
+    setError(null);
     setStatus("looking_up");
     setPasteOpen(false);
     try {
@@ -277,8 +278,8 @@ export default function Import() {
   };
 
   const fetchManualDetails = async () => {
-    if (!mAirline?.iata || !mFlightNumber.trim() || !mDate) {
-      toast.error("Airline, flight number, and date please.");
+    if (!mAirline?.iata || !mFlightNumber.trim()) {
+      toast.error("Please select an airline and enter a flight number.");
       return;
     }
     setMFetching(true);
@@ -720,7 +721,7 @@ export default function Import() {
             )}
 
             {/* Step 4: Date & Time */}
-            {(mFetched?.found || mFrom || mTo) && (
+            {(mFetched?.found || mFrom || mTo || (mAirline && mFlightNumber)) && (
               <>
                 <div className="grid grid-cols-3 gap-2">
                   <div className="flex flex-col gap-1.5 col-span-1">

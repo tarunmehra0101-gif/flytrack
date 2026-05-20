@@ -50,10 +50,11 @@ export const AIRPORTS = {
 
 export const AIRLINES = {
   AI: "Air India", "6E": "IndiGo", UK: "Vistara", SG: "SpiceJet", QP: "Akasa Air",
-  IX: "Air India Express",
+  IX: "Air India Express", I5: "AirAsia India", G8: "Go First",
   EK: "Emirates", EY: "Etihad", QR: "Qatar Airways",
   BA: "British Airways", LH: "Lufthansa", AF: "Air France", KL: "KLM", LX: "SWISS",
   SQ: "Singapore Airlines", CX: "Cathay Pacific", TG: "Thai Airways",
+  UL: "SriLankan Airlines", MH: "Malaysia Airlines",
   JL: "Japan Airlines", NH: "ANA", KE: "Korean Air",
   UA: "United", AA: "American", DL: "Delta", B6: "JetBlue", WN: "Southwest",
   AC: "Air Canada", QF: "Qantas", VS: "Virgin Atlantic", TK: "Turkish Airlines",
