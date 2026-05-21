@@ -123,7 +123,7 @@ export default function Onboarding() {
   };
 
   return (
-    <div className="h-full w-full flex flex-col px-6 pt-14 pb-8" data-testid="onboarding-page">
+    <div className="h-full w-full flex flex-col px-6 pt-14 pb-8 overflow-y-auto no-scrollbar" data-testid="onboarding-page">
       {/* Back button + Progress bar */}
       <div className="flex items-center gap-3 mb-10">
         {stepIdx > 0 && (
@@ -238,7 +238,7 @@ export default function Onboarding() {
           </div>
 
           {/* Bottom CTA */}
-          <div className="mt-auto">
+          <div className="mt-auto pt-6 flex-shrink-0">
             {stepIdx === 0 && (
               <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground mb-3">
                 <ShieldCheck size={11} /> Only what we need to shape your travel story.

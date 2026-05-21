@@ -12,15 +12,62 @@ from __future__ import annotations
 
 import io
 import logging
+import os
 import re
 from datetime import datetime
 from typing import Optional
 
 from pypdf import PdfReader
 
-from .airports import AIRPORTS, lookup_airline, lookup_airport, search_airports
+from .airports import AIRPORTS, AIRLINES, lookup_airline, lookup_airport, search_airports
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_with_gemini(text: str) -> Optional[dict]:
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        return None
+    try:
+        import google.generativeai as genai
+        import json
+        genai.configure(api_key=api_key)
+        # Use gemini-1.5-flash as it is fast and perfect for structured JSON extraction
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        
+        prompt = (
+            "You are an expert flight ticket parser. Analyze the following text extracted from a flight ticket/boarding pass "
+            "and extract all flight details. Reject mock or baggage allowance numbers (e.g. lines like '6E 15KG' represent baggage, not flight number 6E15). "
+            "Return a JSON object matching this schema exactly:\n"
+            "{\n"
+            "  \"flights\": [\n"
+            "    {\n"
+            "      \"passenger_name\": \"string or null\",\n"
+            "      \"flight_number\": \"string (e.g. AI505, 6E2341)\",\n"
+            "      \"airline_iata\": \"string (2 letters, e.g. AI, 6E)\",\n"
+            "      \"departure_airport_iata\": \"string (3 letters, e.g. DEL, BOM)\",\n"
+            "      \"arrival_airport_iata\": \"string (3 letters, e.g. BOM, DEL)\",\n"
+            "      \"flight_date\": \"string (YYYY-MM-DD format) or null\",\n"
+            "      \"departure_time_local\": \"string (HH:MM format) or null\",\n"
+            "      \"arrival_time_local\": \"string (HH:MM format) or null\",\n"
+            "      \"seat_number\": \"string or null\",\n"
+            "      \"ticket_number\": \"string or null\",\n"
+            "      \"pnr\": \"string or null\"\n"
+            "    }\n"
+            "  ]\n"
+            "}\n\n"
+            f"Raw text:\n{text}"
+        )
+        
+        response = model.generate_content(
+            prompt,
+            generation_config={"response_mime_type": "application/json"}
+        )
+        return json.loads(response.text)
+    except Exception as e:
+        logger.error("Gemini AI parser failed: %s", e)
+        return None
+
 
 # Common airline IATA codes + names (kept in sync with airports.AIRLINES).
 AIRLINE_NAME_TO_IATA = {
@@ -38,7 +85,7 @@ AIRLINE_NAME_TO_IATA = {
 }
 
 FLIGHT_NUM_RE = re.compile(r"\b([A-Z0-9]{2})\s*[-]?\s*(\d{1,4}[A-Z]?)\b")
-PNR_RE = re.compile(r"\b(?:PNR|Booking\s*Ref(?:erence)?|Reservation\s*Code|GDS\s*PNR)\s*[:\-]?\s*([A-Z0-9]{5,7})\b", re.IGNORECASE)
+PNR_RE = re.compile(r"\b(?:PNR|Booking\s*Ref(?:erence)?|Reservation\s*Code|GDS\s*PNR)\b\s*[:\-]?\s*([A-Z0-9]{5,7})\b", re.IGNORECASE)
 DATE_RE = re.compile(
     r"\b(\d{1,2})[\s\-/\.]*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[A-Za-z]*[\s\-/\.,]*\s*(\d{2,4})\b",
     re.IGNORECASE,
@@ -46,6 +93,22 @@ DATE_RE = re.compile(
 TIME_RE = re.compile(r"\b(\d{1,2}):(\d{2})\s*(AM|PM)?\b", re.IGNORECASE)
 IATA_PAIR_RE = re.compile(r"\b([A-Z]{3})\s*(?:→|->|-|to|–|—|\s)\s*([A-Z]{3})\b")
 SEAT_RE = re.compile(r"\bSeat(?:\s*No\.?)?\s*[:\-]?\s*([0-9]{1,3}[A-Z])\b", re.IGNORECASE)
+
+KNOWN_AIRLINE_CODES = set(AIRLINES.keys()) | set(AIRLINE_NAME_TO_IATA.values()) | {
+    "AK", "9W", "S7", "AZ", "IB", "TP", "SK", "AY", "LO", "OS", "RJ", "PK", "BG", "FY",
+    "H9", "WJ", "B6", "WN", "FR", "W6", "U2", "EI", "SU", "HU", "CA", "MU", "CZ", "3U",
+    "SC", "ZH", "FM", "CI", "BR", "GA", "WE", "MH", "IX"
+}
+
+BAD_PREFIX_RE = re.compile(
+    r"\b(?:SEQ(?:UENCE)?|ZONE|ROW|AMOUNT|INR|RS\.?|FARE|TAX|TOTAL|PAID|CHARGE|FEE|COST|PRICE|RATE|TICKET\s*(?:NO|NUMBER)?|E.?TICKET|FFN|BAG|BAGGAGE|QTY|QUANTITY)\s*[:#\-]?\s*$",
+    re.IGNORECASE
+)
+
+BAD_SUFFIX_RE = re.compile(
+    r"^\s*(?:KG|KGS|PC|PCS|INR|USD|CAD|EUR|GBP|MULTIPLY|SEAT|ROW|ZONE|PAX|PAGE|QTY|AM|PM|MIN|MINS|HRS|HOURS|:\d{2})\b",
+    re.IGNORECASE
+)
 
 BLACKLISTED_3LETTER_WORDS = {
     # Travel & document terms
@@ -140,22 +203,53 @@ def _find_airports(text: str) -> tuple[Optional[str], Optional[str]]:
     return None, None
 
 
-def parse_pdf_ticket(pdf_bytes: bytes) -> dict:
-    """Parse a PDF e-ticket and return a partial flight dict + confidence.
+def parse_ticket_text(text: str) -> dict:
+    """Parse raw flight ticket/boarding pass text and return flight fields + segments."""
+    # 1. Try AI parsing first if Gemini API key is configured
+    gemini_data = _parse_with_gemini(text)
+    if gemini_data and isinstance(gemini_data.get("flights"), list) and gemini_data["flights"]:
+        segments = []
+        for idx, f in enumerate(gemini_data["flights"]):
+            f_dep = f.get("departure_airport_iata")
+            f_arr = f.get("arrival_airport_iata")
+            f_air = f.get("airline_iata") or (f.get("flight_number")[:2] if f.get("flight_number") else None)
+            
+            flight_num = f.get("flight_number")
+            if flight_num:
+                flight_num = re.sub(r"\s+", "", flight_num).upper()
+            
+            from_iata = f_dep.upper() if f_dep else None
+            to_iata = f_arr.upper() if f_arr else None
+            airline_iata = f_air.upper() if f_air else None
+            
+            segment_fields = {
+                "airline_iata": airline_iata,
+                "airline_name": (lookup_airline(airline_iata) or {}).get("name") if airline_iata else None,
+                "flight_number": flight_num,
+                "from_airport": from_iata,
+                "to_airport": to_iata,
+                "flight_date_iso": f.get("flight_date"),
+                "pnr": f.get("pnr"),
+                "seat_number": f.get("seat_number"),
+                "passenger_name": f.get("passenger_name"),
+                "from_city": (lookup_airport(from_iata) or {}).get("city") if from_iata else None,
+                "to_city": (lookup_airport(to_iata) or {}).get("city") if to_iata else None,
+                "sequence_index": idx,
+            }
+            segments.append(segment_fields)
+            
+        fields = {k: v for k, v in segments[0].items() if k != "sequence_index"}
+        
+        return {
+            "text_length": len(text),
+            "confidence": 0.98,
+            "fields": fields,
+            "segments": segments,
+            "valid": True,
+            "error": None,
+        }
 
-    Returns: {
-      "text_length": int,
-      "confidence": float 0..1,
-      "fields": {airline_iata, flight_number, from_airport, to_airport,
-                 flight_date_iso, pnr, seat_number, passenger_name, raw_flight_number}
-      "valid": bool,
-      "error": Optional[str]
-    }
-    """
-    text = _extract_pdf_text(pdf_bytes)
-    if not text or len(text) < 40:
-        return {"text_length": len(text), "confidence": 0.0, "fields": {}, "valid": False, "error": "PDF has no readable text"}
-
+    # 2. Fallback to highly polished local regex heuristics
     airline_iata = _detect_airline_iata(text)
     from_iata, to_iata = _find_airports(text)
 
@@ -165,16 +259,21 @@ def parse_pdf_ticket(pdf_bytes: bytes) -> dict:
     if airline_iata:
         m = re.search(rf"\b{airline_iata}\s*[-]?\s*(\d{{1,4}}[A-Z]?)\b", text)
         if m:
-            flight_raw = m.group(1)
-            flight_num = f"{airline_iata}{flight_raw}"
-    if not flight_num:
-        m = FLIGHT_NUM_RE.search(text)
-        if m:
-            candidate_iata = m.group(1).upper()
-            if lookup_airline(candidate_iata) or (candidate_iata.isalpha() and candidate_iata not in BLACKLISTED_2LETTER_WORDS):
-                airline_iata = airline_iata or candidate_iata
-                flight_raw = m.group(2)
+            suffix = text[m.end():]
+            if not BAD_SUFFIX_RE.match(suffix):
+                flight_raw = m.group(1)
                 flight_num = f"{airline_iata}{flight_raw}"
+    if not flight_num:
+        for m in FLIGHT_NUM_RE.finditer(text):
+            candidate_iata = m.group(1).upper()
+            if candidate_iata in KNOWN_AIRLINE_CODES:
+                prefix = text[max(0, m.start() - 30):m.start()]
+                suffix = text[m.end():]
+                if not BAD_PREFIX_RE.search(prefix) and not BAD_SUFFIX_RE.match(suffix):
+                    airline_iata = airline_iata or candidate_iata
+                    flight_raw = m.group(2)
+                    flight_num = f"{airline_iata}{flight_raw}"
+                    break
 
     # Date
     date_iso = None
@@ -226,12 +325,25 @@ def parse_pdf_ticket(pdf_bytes: bytes) -> dict:
     seen_flights = []
     for m in FLIGHT_NUM_RE.finditer(text):
         code, num = m.group(1).upper(), m.group(2)
-        if not lookup_airline(code):
-            if code in BLACKLISTED_2LETTER_WORDS or not code.isalpha():
-                continue
+        if code not in KNOWN_AIRLINE_CODES:
+            continue
+        prefix = text[max(0, m.start() - 30):m.start()]
+        suffix = text[m.end():]
+        if BAD_PREFIX_RE.search(prefix) or BAD_SUFFIX_RE.match(suffix):
+            continue
+        try:
+            numeric_part = int(num)
+            if numeric_part < 100:
+                context = text[max(0, m.start() - 50):min(len(text), m.end() + 50)].lower()
+                if "flight" not in context:
+                    continue
+        except ValueError:
+            pass
+
         candidate = f"{code}{num}"
         if candidate not in seen_flights:
             seen_flights.append(candidate)
+
     if flight_num and flight_num not in seen_flights:
         seen_flights.insert(0, flight_num)
 
@@ -265,3 +377,21 @@ def parse_pdf_ticket(pdf_bytes: bytes) -> dict:
         "valid": confidence >= 0.6,
         "error": None if confidence >= 0.6 else "Could not confidently extract all flight fields",
     }
+
+
+def parse_pdf_ticket(pdf_bytes: bytes) -> dict:
+    """Parse a PDF e-ticket and return a partial flight dict + confidence.
+
+    Returns: {
+      "text_length": int,
+      "confidence": float 0..1,
+      "fields": {airline_iata, flight_number, from_airport, to_airport,
+                 flight_date_iso, pnr, seat_number, passenger_name, raw_flight_number}
+      "valid": bool,
+      "error": Optional[str]
+    }
+    """
+    text = _extract_pdf_text(pdf_bytes)
+    if not text or len(text) < 40:
+        return {"text_length": len(text), "confidence": 0.0, "fields": {}, "valid": False, "error": "PDF has no readable text"}
+    return parse_ticket_text(text)

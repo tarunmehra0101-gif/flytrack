@@ -175,7 +175,7 @@ function findPassenger(text) {
 }
 
 function findPnr(text) {
-  const match = text.match(/\b(?:PNR|BOOKING REF(?:ERENCE)?|RESERVATION CODE|RECORD LOCATOR|CONFIRM(?:ATION)?\s*(?:NO|NUMBER|CODE|#)?)\s*[:#\-]?\s*([A-Z0-9]{5,8})\b/i);
+  const match = text.match(/\b(?:PNR|BOOKING REF(?:ERENCE)?|RESERVATION CODE|RECORD LOCATOR|CONFIRM(?:ATION)?\s*(?:NO|NUMBER)?|E-?TICKET|FFN)\b\s*[:#\-]?\s*([A-Z0-9]{5,8})\b/i);
   return match?.[1]?.toUpperCase() || null;
 }
 
@@ -395,6 +395,7 @@ function flightMatches(text) {
   if (!matches.length) {
     const codeNumRe = /\b([A-Z0-9]{2})\s*[-~]?\s*(\d{2,4}[A-Z]?)\b/g;
     const badPrefixRe = /\b(SEQ(?:UENCE)?|ZONE|ROW|AMOUNT|INR|RS\.?|FARE|TAX|TOTAL|PAID|CHARGE|FEE|COST|PRICE|RATE|TICKET\s*(?:NO|NUMBER)?|E.?TICKET|FFN)\s*[:#\-]?\s*$/i;
+    const badSuffixRe = /^\s*(?:KG|KGS|PC|PCS|INR|USD|CAD|EUR|GBP|MULTIPLY|SEAT|ROW|ZONE|PAX|PAGE|QTY|AM|PM|MIN|MINS|HRS|HOURS|:\d{2})\b/i;
     const contextKeywords = /\b(DEPART|ARRIV|BOARD|CHECK.?IN|GATE|TERMINAL|PNR|BOOKING|ORIGIN|DESTINATION|FLIGHT)\b/i;
     const candidates = [];
 
@@ -405,9 +406,10 @@ function flightMatches(text) {
 
       const numericPart = parseInt(number, 10);
       const prefix = upper.slice(Math.max(0, match.index - 30), match.index);
+      const suffix = upper.slice(match.index + match[0].length);
 
-      // Skip if preceded by a non-flight label
-      if (badPrefixRe.test(prefix)) continue;
+      // Skip if preceded by a non-flight label or followed by a non-flight suffix
+      if (badPrefixRe.test(prefix) || badSuffixRe.test(suffix)) continue;
 
       // Skip very small numbers (seat/zone) unless near "flight" keyword
       if (numericPart < 100 && !/FLIGHT/i.test(prefix)) continue;

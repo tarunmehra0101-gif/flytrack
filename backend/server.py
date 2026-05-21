@@ -205,8 +205,8 @@ def _apply_enrichment(segment: dict, enrichment: dict) -> dict:
     segment["terminal_departure"] = dep.get("terminal") or segment.get("terminal_departure")
     segment["terminal_arrival"] = arr.get("terminal") or segment.get("terminal_arrival")
     segment["gate"] = dep.get("gate") or segment.get("gate")
-    segment["departure_city_name"] = dep.get("city") or segment.get("departure_city_name")
-    segment["arrival_city_name"] = arr.get("city") or segment.get("arrival_city_name")
+    segment["departure_city_name"] = segment.get("departure_city_name") or dep.get("city")
+    segment["arrival_city_name"] = segment.get("arrival_city_name") or arr.get("city")
     segment["airline_name"] = enrichment.get("airline_name") or segment.get("airline_name")
     if enrichment.get("airline_iata"):
         segment["airline_iata"] = enrichment.get("airline_iata")
@@ -583,6 +583,99 @@ async def decode_only(payload: BoardingPassIngestReq):
 async def ingest_boarding_pass(payload: BoardingPassIngestReq, user: dict = Depends(_auth)):
     """Decode + enrich + store an artifact + create a parsed_segment (pending review)."""
     result = parse_bcbp(payload.barcode_string)
+    
+    # Image/OCR text fallback for e-tickets uploaded as images
+    if not result.valid:
+        candidate_text = payload.visible_text or payload.barcode_string
+        if candidate_text and len(candidate_text.strip()) > 15:
+            from services.pdf_parser import parse_ticket_text
+            text_result = parse_ticket_text(candidate_text)
+            if text_result.get("valid") or text_result.get("confidence", 0) >= 0.4:
+                artifact_id = f"art_{uuid.uuid4().hex[:12]}"
+                artifact_doc = {
+                    "id": artifact_id,
+                    "user_id": user["user_id"],
+                    "source_type": "pdf_eticket",
+                    "original_filename": payload.original_filename or "ticket_image.png",
+                    "storage_path": None,
+                    "mime_type": "image/*" if payload.image_base64 else "text/plain",
+                    "barcode_raw": payload.barcode_string,
+                    "image_base64": payload.image_base64,
+                    "extracted_text": candidate_text,
+                    "parser_status": "parsed" if text_result.get("valid") else "needs_review",
+                    "parse_confidence": text_result.get("confidence", 0.0),
+                    "parser_method": "ocr_text_regex",
+                    "parser_error": text_result.get("error"),
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }
+                await db.artifacts.insert_one(artifact_doc)
+                artifact_doc.pop("_id", None)
+
+                segments = []
+                confirmed_segments = []
+                duplicate_count = 0
+                enrichment_applied = False
+                
+                for idx, seg_fields in enumerate(text_result.get("segments") or []):
+                    dep_meta = lookup_airport(seg_fields.get("from_airport"))
+                    arr_meta = lookup_airport(seg_fields.get("to_airport"))
+                    segment = {
+                        "id": f"pseg_{uuid.uuid4().hex[:12]}",
+                        "artifact_id": artifact_id,
+                        "user_id": user["user_id"],
+                        "source_type": "pdf_eticket",
+                        "sequence_index": seg_fields.get("sequence_index", idx),
+                        "airline_name": seg_fields.get("airline_name"),
+                        "airline_iata": seg_fields.get("airline_iata"),
+                        "flight_number": seg_fields.get("flight_number"),
+                        "booking_reference": seg_fields.get("pnr"),
+                        "pnr": seg_fields.get("pnr"),
+                        "passenger_name": seg_fields.get("passenger_name"),
+                        "ticket_number": seg_fields.get("ticket_number"),
+                        "departure_airport_iata": seg_fields.get("from_airport"),
+                        "arrival_airport_iata": seg_fields.get("to_airport"),
+                        "departure_city_name": seg_fields.get("from_city") or (dep_meta or {}).get("city"),
+                        "arrival_city_name": seg_fields.get("to_city") or (arr_meta or {}).get("city"),
+                        "flight_date": seg_fields.get("flight_date_iso"),
+                        "departure_time_local": None,
+                        "arrival_time_local": None,
+                        "departure_time_utc": None,
+                        "arrival_time_utc": None,
+                        "seat_number": seg_fields.get("seat_number"),
+                        "terminal_departure": None,
+                        "terminal_arrival": None,
+                        "gate": None,
+                        "confidence_score": text_result.get("confidence", 0.0),
+                        "needs_review": True,
+                        "raw_json": {"image_ocr_parse": seg_fields, "text_length": text_result.get("text_length")},
+                        "enrichment": None,
+                        "status": "pending_review",
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                    enrichment = None
+                    if segment.get("flight_number") and segment.get("flight_date"):
+                        enrichment = await flight_status_client.enrich_flight(segment["flight_number"], segment["flight_date"])
+                        if enrichment:
+                            segment = _apply_enrichment(segment, enrichment)
+                            enrichment_applied = True
+                    segment = _decorate_segment(segment)
+                    await db.parsed_segments.insert_one(segment)
+                    segment.pop("_id", None)
+                    segments.append(segment)
+
+                artifact_resp = {k: v for k, v in artifact_doc.items() if k != "image_base64"}
+                return {
+                    "artifact": artifact_resp,
+                    "segment": segments[0] if segments else None,
+                    "segments": segments,
+                    "confirmed_segments": confirmed_segments,
+                    "auto_confirmed": len(confirmed_segments),
+                    "duplicates": duplicate_count,
+                    "enrichment_applied": enrichment_applied,
+                    "enrichment_enabled": flight_status_client.enabled,
+                }
+
     artifact_id = f"art_{uuid.uuid4().hex[:12]}"
     artifact_doc = {
         "id": artifact_id,

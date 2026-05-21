@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import {
   Camera, Loader2, AlertTriangle, CheckCircle2,
   PenLine, History, FileText, Sparkles, X, Clock,
-  PlaneTakeoff, Video,
+  PlaneTakeoff, Video, QrCode, UploadCloud,
 } from "lucide-react";
 import Shell from "@/components/shell/Shell";
 import BoardingPassCard from "@/components/BoardingPassCard";
@@ -74,8 +74,7 @@ export default function Import() {
   const location = new URLSearchParams(window.location.search);
   const isOnboarding = location.get("onboarding") === "true";
   useAuth();
-  const imgRef = useRef(null);
-  const pdfRef = useRef(null);
+  const fileInputRef = useRef(null);
   const [status, setStatus] = useState("idle"); // idle | reading | looking_up | preview | error
   const [uploadType, setUploadType] = useState(null); // null | "image" | "pdf"
   const [error, setError] = useState(null);
@@ -84,6 +83,17 @@ export default function Import() {
   const [pasteOpen, setPasteOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
+
+  const handleFileSelection = (files) => {
+    const list = Array.from(files || []);
+    if (!list.length) return;
+    const isPdf = list.some(f => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf"));
+    if (isPdf) {
+      handlePdfs(list);
+    } else {
+      handleImages(list);
+    }
+  };
 
 
   // Live scanner state
@@ -437,104 +447,81 @@ export default function Import() {
           </div>
         )}
 
-        {/* Main scan options */}
-        <div className="grid grid-cols-2 gap-3">
-          {hasCamera && (
-            <button
-              onClick={startLiveScan}
-              disabled={isBusy}
-              className="tl-card tl-card-intense tl-card-interactive aspect-[4/3] flex flex-col items-center justify-center gap-3 border-2 border-primary/40 hover:border-primary/70 transition shadow-[0_0_18px_-4px_hsl(var(--primary)/0.35)] animate-pulse-subtle"
-              data-testid="live-scan-btn"
-            >
-              <div className="w-12 h-12 rounded-2xl bg-primary/12 text-primary flex items-center justify-center">
-                <Video size={20} strokeWidth={2.2} />
-              </div>
-              <div className="text-center">
-                <p className="text-sm font-semibold">Live scan</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">Real-time camera</p>
-              </div>
-            </button>
-          )}
+        {/* Main premium 3-path ingestion options */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Pathway 1: Barcode Scan */}
           <button
-            onClick={() => !isBusy && imgRef.current?.click()}
+            onClick={startLiveScan}
             disabled={isBusy}
-            className={`tl-card tl-card-intense tl-card-interactive ${hasCamera ? 'aspect-[4/3]' : 'aspect-[2/1] col-span-2'} flex flex-col items-center justify-center gap-3 border-2 border-primary/40 hover:border-primary/70 transition shadow-[0_0_18px_-4px_hsl(var(--primary)/0.35)] animate-pulse-subtle`}
+            className="tl-card tl-card-intense tl-card-interactive flex flex-col items-center justify-center p-6 text-center border-2 border-primary/20 hover:border-primary/60 transition-all duration-300 shadow-[0_4px_20px_-4px_rgba(37,99,235,0.15)] hover:shadow-[0_4px_30px_-2px_rgba(37,99,235,0.3)] min-h-[175px] group relative overflow-hidden text-left"
+            data-testid="live-scan-btn"
+          >
+            <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-primary/10 to-transparent rounded-bl-full pointer-events-none transition-all duration-300 group-hover:scale-110" />
+            <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-4 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3">
+              <QrCode size={26} strokeWidth={2} />
+            </div>
+            <h3 className="text-base font-bold tracking-tight text-foreground">Scan Barcode</h3>
+            <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">Live camera scanning of e-ticket or boarding pass barcodes</p>
+            <span 
+              className="text-[10px] text-primary font-medium underline underline-offset-4 mt-3 block hover:text-primary z-10 relative cursor-pointer" 
+              onClick={(e) => { e.stopPropagation(); setPasteOpen(true); }}
+              data-testid="paste-barcode-fallback"
+            >
+              Or paste barcode string
+            </span>
+          </button>
+
+          {/* Pathway 2: Upload Ticket (PDF / Image) */}
+          <button
+            onClick={() => !isBusy && fileInputRef.current?.click()}
+            disabled={isBusy}
+            className="tl-card tl-card-intense tl-card-interactive flex flex-col items-center justify-center p-6 text-center border-2 border-primary/20 hover:border-primary/60 transition-all duration-300 shadow-[0_4px_20px_-4px_rgba(37,99,235,0.15)] hover:shadow-[0_4px_30px_-2px_rgba(37,99,235,0.3)] min-h-[175px] group relative overflow-hidden"
             data-testid="upload-cta"
           >
+            <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-primary/10 to-transparent rounded-bl-full pointer-events-none transition-all duration-300 group-hover:scale-110" />
             <input
-              ref={imgRef}
+              ref={fileInputRef}
               type="file"
-              accept="image/*"
-              capture="environment"
+              accept="application/pdf,.pdf,image/*"
               multiple
               className="hidden"
               data-testid="file-input"
-              onChange={(e) => handleImages(e.target.files)}
+              onChange={(e) => handleFileSelection(e.target.files)}
             />
-            {isImageBusy ? (
-              <div className="flex flex-col items-center gap-2">
-                <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                <p className="text-xs font-medium">{status === "reading" ? "Reading…" : "Looking up…"}</p>
+            {isBusy && (uploadType === "image" || uploadType === "pdf") ? (
+              <div className="flex flex-col items-center gap-3">
+                <Loader2 className="w-10 h-10 text-primary animate-spin" />
+                <p className="text-sm font-semibold">{status === "reading" ? "Reading file..." : "Analyzing ticket..."}</p>
               </div>
             ) : (
               <>
-                <div className="w-12 h-12 rounded-2xl bg-primary/12 text-primary flex items-center justify-center">
-                  <Camera size={20} strokeWidth={2.2} />
+                <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-4 transition-transform duration-300 group-hover:scale-110 group-hover:-translate-y-0.5">
+                  <UploadCloud size={26} strokeWidth={2} />
                 </div>
-                <div className="text-center">
-                  <p className="text-sm font-semibold">Photo / Upload</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">Boarding pass image</p>
-                </div>
+                <h3 className="text-base font-bold tracking-tight text-foreground">Upload Ticket</h3>
+                <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">Drop or browse PDF e-tickets, boarding pass images, or screenshots</p>
+                <span className="text-[10px] text-muted-foreground mt-3 font-mono">PDF, PNG, JPG, JPEG</span>
               </>
             )}
           </button>
-        </div>
 
-        {/* Secondary actions */}
-        <div className="grid grid-cols-2 gap-2 text-xs">
-          <button
-            onClick={() => !isBusy && pdfRef.current?.click()}
-            disabled={isBusy}
-            className="tl-card tl-card-interactive p-3 flex items-center justify-center gap-2 hover:border-primary/50 transition disabled:opacity-50"
-            data-testid="upload-pdf-btn"
-          >
-            {isPdfBusy ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />
-                <span className="font-medium">{status === "reading" ? "Reading PDF…" : "Parsing PDF…"}</span>
-              </>
-            ) : (
-              <>
-                <FileText size={14} />
-                <span className="font-medium">Got an e-ticket?</span>
-              </>
-            )}
-          </button>
-          <input
-            ref={pdfRef}
-            type="file"
-            accept="application/pdf,.pdf"
-            multiple
-            className="hidden"
-            data-testid="pdf-input"
-            onChange={(e) => handlePdfs(e.target.files)}
-          />
+          {/* Pathway 3: Manual Flight Entry */}
           <button
             onClick={() => setManualOpen(true)}
-            className="tl-card tl-card-interactive p-3 flex items-center justify-center gap-2 hover:border-primary/50 transition"
+            className="tl-card tl-card-intense tl-card-interactive flex flex-col items-center justify-center p-6 text-center border-2 border-primary/20 hover:border-primary/60 transition-all duration-300 shadow-[0_4px_20px_-4px_rgba(37,99,235,0.15)] hover:shadow-[0_4px_30px_-2px_rgba(37,99,235,0.3)] min-h-[175px] group relative overflow-hidden"
             data-testid="manual-entry-btn"
           >
-            <PenLine size={14} /> <span className="font-medium">I know my flight</span>
+            <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-primary/10 to-transparent rounded-bl-full pointer-events-none transition-all duration-300 group-hover:scale-110" />
+            <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-4 transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3">
+              <PenLine size={26} strokeWidth={2} />
+            </div>
+            <h3 className="text-base font-bold tracking-tight text-foreground">Manual Entry</h3>
+            <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">Know your flight? Direct live lookup and step-by-step entry forms</p>
+            <span className="text-[10px] text-primary font-medium underline underline-offset-4 mt-3 block hover:text-primary z-10 relative cursor-pointer">
+              Fill in details
+            </span>
           </button>
         </div>
-
-        <button
-          onClick={() => setPasteOpen(true)}
-          className="text-[11px] text-muted-foreground underline underline-offset-4 self-center"
-          data-testid="paste-barcode-fallback"
-        >
-          Have a barcode string? Paste it here
-        </button>
 
         {error && (
           <div className="tl-card p-3 flex items-start gap-3 border-destructive/40 bg-destructive/5" data-testid="error-banner">

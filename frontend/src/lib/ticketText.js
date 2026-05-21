@@ -1,3 +1,22 @@
+async function loadPdfJsFromCdn() {
+  if (window.pdfjsLib) return window.pdfjsLib;
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js";
+    script.onload = () => {
+      const pdfjs = window.pdfjsLib;
+      if (pdfjs) {
+        pdfjs.GlobalWorkerOptions.workerSrc = "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+        resolve(pdfjs);
+      } else {
+        reject(new Error("pdfjsLib not found on window after script load"));
+      }
+    };
+    script.onerror = () => reject(new Error("Failed to load PDF.js from CDN"));
+    document.head.appendChild(script);
+  });
+}
+
 async function ocrPdfPage(pdf, pageNo) {
   if (typeof document === "undefined") return "";
   const page = await pdf.getPage(pageNo);
@@ -13,10 +32,16 @@ async function ocrPdfPage(pdf, pageNo) {
 }
 
 export async function extractPdfText(file, options = {}) {
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  pdfjs.GlobalWorkerOptions.workerSrc = "https://unpkg.com/pdfjs-dist@5.7.284/legacy/build/pdf.worker.min.mjs";
+  let pdfjs;
+  try {
+    pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    pdfjs.GlobalWorkerOptions.workerSrc = "https://unpkg.com/pdfjs-dist@5.7.284/legacy/build/pdf.worker.min.mjs";
+  } catch (err) {
+    console.warn("Local pdfjs-dist import failed, falling back to CDN:", err);
+    pdfjs = await loadPdfJsFromCdn();
+  }
   const buffer = await file.arrayBuffer();
-  const pdf = await pdfjs.getDocument({ data: buffer }).promise;
+  const pdf = await pdfjs.getDocument({ data: new Uint8Array(buffer) }).promise;
   const pages = [];
   for (let pageNo = 1; pageNo <= pdf.numPages; pageNo += 1) {
     const page = await pdf.getPage(pageNo);
