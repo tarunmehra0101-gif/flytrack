@@ -65,20 +65,7 @@ const AIRLINE_ALIASES = [
   ["FLYDUBAI", "FZ"], ["OMAN AIR", "WY"], ["GULF AIR", "GF"],
 ];
 
-// All known 2-letter IATA airline codes for matching in text
-// Auto-generated from AIRLINES + known regional carriers. Sorted longest-first so
-// two-char codes like "I5" don't shadow longer prefixes.
-const AIRLINE_CODES_RE = (() => {
-  const base = new Set([
-    "AI","6E","UK","SG","QP","EK","EY","QR","SQ","BA","LH","AF","KL","LX",
-    "CX","TG","TK","JL","NH","KE","UA","AA","DL","AC","QF","VS","I5","G8",
-    "MH","UL","IX","AK","FZ","WY","GF","9W","S7","AZ","IB","TP","SK","AY",
-    "LO","OS","RJ","PK","BG","FY","H9","WJ","B6","WN","FR","W6","U2","EI",
-    "SU","HU","CA","MU","CZ","3U","SC","ZH","FM","CI","BR","GA","SV","WE",
-    ...Object.keys(AIRLINES),
-  ]);
-  return [...base].sort((a, b) => b.length - a.length).join("|");
-})();
+
 
 const BLACKLISTED_3LETTER_WORDS = new Set([
   // Travel & document terms
@@ -375,31 +362,74 @@ function flightMatches(text) {
   const matches = [];
   const seen = new Set();
 
-  // Pattern 1: Standard "AI505" or "6E 7576" or "FLIGHT NO IX 2690"
-  const flightRe = new RegExp(`\\b(?:FLIGHT(?:\\s*(?:NO|NUMBER|#))?\\s*[:#\\-]?\\s*)?((${AIRLINE_CODES_RE})\\s*[-~]?\\s*\\d{1,5}[A-Z]?)\\b`, "g");
+  // Build a fast lookup set instead of a regex alternation
+  const AIRLINE_CODES_SET = new Set([
+    "AI","6E","UK","SG","QP","EK","EY","QR","SQ","BA","LH","AF","KL","LX",
+    "CX","TG","TK","JL","NH","KE","UA","AA","DL","AC","QF","VS","I5","G8",
+    "MH","UL","IX","AK","FZ","WY","GF","9W","S7","AZ","IB","TP","SK","AY",
+    "LO","OS","RJ","PK","BG","FY","H9","WJ","B6","WN","FR","W6","U2","EI",
+    "SU","HU","CA","MU","CZ","3U","SC","ZH","FM","CI","BR","GA","SV","WE",
+    ...Object.keys(AIRLINES),
+  ]);
+
+  function addMatch(code, airline, number, index) {
+    if (seen.has(code)) return;
+    const numericPart = parseInt(number, 10);
+    if (isNaN(numericPart) || numericPart < 1 || numericPart > 9999) return;
+    seen.add(code);
+    matches.push({ code, airline, number, index });
+  }
+
+  // Priority 1: Explicitly labeled — "Flight No IX 2690", "Flight 6E7576"
+  const labeledRe = /\bFLIGHT\s*(?:NO\.?|NUMBER|#|:)?\s*[:#\-]?\s*([A-Z0-9]{2})\s*[-~]?\s*(\d{1,4}[A-Z]?)\b/g;
   let match;
-  while ((match = flightRe.exec(upper))) {
-    const code = match[1].replace(/[\s\-~]+/g, "");
-    if (!seen.has(code)) {
-      seen.add(code);
-      const airline = match[2];
-      matches.push({ code, airline, number: code.slice(airline.length), index: match.index });
+  while ((match = labeledRe.exec(upper))) {
+    const airline = match[1];
+    const number = match[2];
+    if (AIRLINE_CODES_SET.has(airline)) {
+      addMatch(`${airline}${number}`, airline, number, match.index);
     }
   }
 
-  // Pattern 2: "Flight No  IX 2690" — more generous spacing (handles PDF extraction artifacts)
+  // Priority 2: Unlabeled airline+number, validated against Set + context checks
   if (!matches.length) {
-    const labeledRe = /\bFLIGHT\s*(?:NO|NUMBER|#)?\s*[:#\-]?\s*([A-Z0-9]{2})\s+(\d{1,5}[A-Z]?)\b/g;
-    while ((match = labeledRe.exec(upper))) {
+    const codeNumRe = /\b([A-Z0-9]{2})\s*[-~]?\s*(\d{2,4}[A-Z]?)\b/g;
+    const badPrefixRe = /\b(SEQ(?:UENCE)?|ZONE|ROW|AMOUNT|INR|RS\.?|FARE|TAX|TOTAL|PAID|CHARGE|FEE|COST|PRICE|RATE|TICKET\s*(?:NO|NUMBER)?|E.?TICKET|FFN)\s*[:#\-]?\s*$/i;
+    const contextKeywords = /\b(DEPART|ARRIV|BOARD|CHECK.?IN|GATE|TERMINAL|PNR|BOOKING|ORIGIN|DESTINATION|FLIGHT)\b/i;
+    const candidates = [];
+
+    while ((match = codeNumRe.exec(upper))) {
       const airline = match[1];
-      const num = match[2];
-      if (AIRLINES[airline] || airline.match(new RegExp(`^(?:${AIRLINE_CODES_RE})$`))) {
-        const code = `${airline}${num}`;
-        if (!seen.has(code)) {
-          seen.add(code);
-          matches.push({ code, airline, number: num, index: match.index });
-        }
-      }
+      const number = match[2];
+      if (!AIRLINE_CODES_SET.has(airline)) continue;
+
+      const numericPart = parseInt(number, 10);
+      const prefix = upper.slice(Math.max(0, match.index - 30), match.index);
+
+      // Skip if preceded by a non-flight label
+      if (badPrefixRe.test(prefix)) continue;
+
+      // Skip very small numbers (seat/zone) unless near "flight" keyword
+      if (numericPart < 100 && !/FLIGHT/i.test(prefix)) continue;
+
+      // Check proximity to flight-context keywords
+      const neighborhood = upper.slice(Math.max(0, match.index - 100), Math.min(upper.length, match.index + 100));
+      const hasContext = contextKeywords.test(neighborhood);
+
+      candidates.push({ code: `${airline}${number}`, airline, number, index: match.index, hasContext });
+    }
+
+    // Sort: context-near first, then frequency (repeated = real), then position
+    const freq = {};
+    for (const c of candidates) freq[c.code] = (freq[c.code] || 0) + 1;
+    candidates.sort((a, b) =>
+      (b.hasContext ? 1 : 0) - (a.hasContext ? 1 : 0) ||
+      (freq[b.code] - freq[a.code]) ||
+      (a.index - b.index)
+    );
+
+    for (const c of candidates) {
+      addMatch(c.code, c.airline, c.number, c.index);
     }
   }
 
