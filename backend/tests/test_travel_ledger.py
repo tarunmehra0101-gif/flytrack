@@ -651,3 +651,58 @@ class TestFlightLookupCache:
         assert b2.get("cached") is True, f"Expected cached=true on second call: {b2}"
         assert b2.get("found") is True
 
+
+class TestPdfParserAccuracy:
+    def test_pdf_ocr_fallback_accuracy(self, auth_headers):
+        # Simulated e-ticket text containing pricing and baggage details
+        synthetic_ticket = (
+            "E-Ticket Confirmation - MakeMyTrip\n"
+            "Booking ID: NN4FZG\n"
+            "Passenger: Mr. TARUN MEHRA\n"
+            "Flight Details\n"
+            "AI 505  Delhi (DEL) to Mumbai (BOM)\n"
+            "Date: 15 Mar 2026\n"
+            "Departure: 06:30\n"
+            "Arrival: 08:45\n"
+            "Seat: 14A\n"
+            "Class: Economy\n"
+            "Fare Breakdown\n"
+            "Base Fare: INR 4500\n"
+            "Tax: INR 850\n"
+            "Convenience Fee: INR 200\n"
+            "Total: INR 5550\n"
+            "Payment: HDFC Credit Card ending 4456\n"
+            "E-Ticket Number: 0987654321012\n"
+            "Air India\n"
+            "PNR: NN4FZG\n"
+            "Baggage Allowance: 15 KG\n"
+            "Seat selection: RS 350\n"
+        )
+        r = requests.post(
+            f"{API}/boarding-pass/ingest",
+            headers=auth_headers,
+            json={
+                "barcode_string": "INVALID_BARCODE_STRING",
+                "visible_text": synthetic_ticket,
+                "original_filename": "ticket_image.png"
+            },
+            timeout=15,
+        )
+        assert r.status_code == 200, r.text
+        body = r.json()
+        
+        # Verify artifact and segments
+        assert body["artifact"]["parser_status"] in ("parsed", "needs_review")
+        assert body["artifact"]["parser_method"] == "ocr_text_regex"
+        
+        segments = body["segments"]
+        # Ensure only 1 valid flight segment (AI 505) is parsed, and NOT RS 350 or 15 KG or INR 4500
+        assert len(segments) == 1, f"Expected exactly 1 segment, but got {len(segments)}: {[s.get('flight_number') for s in segments]}"
+        seg = segments[0]
+        assert seg["flight_number"] == "AI505"
+        assert seg["departure_airport_iata"] == "DEL"
+        assert seg["arrival_airport_iata"] == "BOM"
+        assert seg["booking_reference"] == "NN4FZG"
+        assert seg["flight_date"] == "2026-03-15"
+
+
