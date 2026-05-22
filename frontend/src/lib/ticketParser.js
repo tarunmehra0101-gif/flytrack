@@ -175,8 +175,15 @@ function findPassenger(text) {
 }
 
 function findPnr(text) {
-  const match = text.match(/\b(?:PNR|BOOKING REF(?:ERENCE)?|RESERVATION CODE|RECORD LOCATOR|CONFIRM(?:ATION)?\s*(?:NO|NUMBER)?|E-?TICKET|FFN)\b\s*[:#\-]?\s*([A-Z0-9]{5,8})\b/i);
-  return match?.[1]?.toUpperCase() || null;
+  const re = /\b(?:PNR|BOOKING REF(?:ERENCE)?|RESERVATION CODE|RECORD LOCATOR|CONFIRM(?:ATION)?(?:\s*(?:NO|NUMBER))?|FFN)\b\s*[:#\-]?\s*\b([A-Z0-9]{5,8})\b/gi;
+  let match;
+  while ((match = re.exec(text))) {
+    const val = match[1].toUpperCase();
+    if (!BLACKLISTED_3LETTER_WORDS.has(val) && val !== "NUMBER" && val !== "TICKET" && !/^\d+$/.test(val)) {
+      return val;
+    }
+  }
+  return null;
 }
 
 function findTicketNumber(text) {
