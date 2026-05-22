@@ -1,18 +1,26 @@
-async function loadPdfJsFromCdn() {
+export async function loadPdfJsFromCdn() {
   if (window.pdfjsLib) return window.pdfjsLib;
   return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error("Timeout loading PDF.js from CDN"));
+    }, 10000);
+
     const script = document.createElement("script");
-    script.src = "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js";
+    script.src = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js";
     script.onload = () => {
+      clearTimeout(timer);
       const pdfjs = window.pdfjsLib;
       if (pdfjs) {
-        pdfjs.GlobalWorkerOptions.workerSrc = "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+        pdfjs.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
         resolve(pdfjs);
       } else {
         reject(new Error("pdfjsLib not found on window after script load"));
       }
     };
-    script.onerror = () => reject(new Error("Failed to load PDF.js from CDN"));
+    script.onerror = () => {
+      clearTimeout(timer);
+      reject(new Error("Failed to load PDF.js from CDN"));
+    };
     document.head.appendChild(script);
   });
 }
@@ -32,14 +40,7 @@ async function ocrPdfPage(pdf, pageNo) {
 }
 
 export async function extractPdfText(file, options = {}) {
-  let pdfjs;
-  try {
-    pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-    pdfjs.GlobalWorkerOptions.workerSrc = "https://unpkg.com/pdfjs-dist@5.7.284/legacy/build/pdf.worker.min.mjs";
-  } catch (err) {
-    console.warn("Local pdfjs-dist import failed, falling back to CDN:", err);
-    pdfjs = await loadPdfJsFromCdn();
-  }
+  const pdfjs = await loadPdfJsFromCdn();
   const buffer = await file.arrayBuffer();
   const pdf = await pdfjs.getDocument({ data: new Uint8Array(buffer) }).promise;
   const pages = [];
@@ -66,14 +67,23 @@ export async function extractPdfText(file, options = {}) {
 
 export async function ocrImageFile(file) {
   const { createWorker } = await import("tesseract.js");
-  const worker = await createWorker("eng", 1, {
-    workerPath: "https://unpkg.com/tesseract.js@7.0.0/dist/worker.min.js",
-    corePath: "https://unpkg.com/tesseract.js-core@7.0.0",
-  });
-  try {
-    const result = await worker.recognize(file);
-    return result?.data?.text || "";
-  } finally {
-    await worker.terminate();
-  }
+  
+  const ocrPromise = (async () => {
+    const worker = await createWorker("eng", 1, {
+      workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/worker.min.js",
+      corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@7.0.0",
+    });
+    try {
+      const result = await worker.recognize(file);
+      return result?.data?.text || "";
+    } finally {
+      await worker.terminate();
+    }
+  })();
+
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error("Timeout processing OCR")), 10000)
+  );
+
+  return Promise.race([ocrPromise, timeoutPromise]);
 }

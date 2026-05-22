@@ -148,6 +148,24 @@ def build_presence_windows(
             **extra,
         })
 
+    if segments and home:
+        first_seg = segments[0]
+        first_dep = _segment_depart_dt(first_seg)
+        if first_dep:
+            start_dt = first_dep - timedelta(days=365)
+            buffer_start = first_dep - timedelta(minutes=90)
+            dep_meta = lookup_airport(home) or {}
+            add_window(
+                "home",
+                start_dt,
+                buffer_start,
+                airport_iata=home,
+                city_name=dep_meta.get("city") or home,
+                country_code=dep_meta.get("country"),
+                is_home=True,
+                estimated=True,
+            )
+
     for idx, seg in enumerate(segments):
         dep = _segment_depart_dt(seg)
         arr = _segment_arrive_dt(seg)
@@ -292,9 +310,9 @@ def compute_wrapped(
     trips: list[dict],
     city_stays: list[dict],
     home_airport_iata: str | None,
-    year: int,
+    year: int | None,
 ) -> dict:
-    segments = _segments_for_year(confirmed_segments, year)
+    segments = _segments_for_year(confirmed_segments, year) if year else list(confirmed_segments)
     windows = build_presence_windows(confirmed_segments, home_airport_iata, year)
     flight_minutes = sum(w["duration_minutes"] for w in windows if w["type"] == "flight")
     airport_minutes = sum(w["duration_minutes"] for w in windows if w["type"] == "airport")
@@ -310,7 +328,7 @@ def compute_wrapped(
 
     for s in segments:
         dep = _segment_depart_dt(s)
-        key = dep.strftime("%Y-%m") if dep else f"{year}-unknown"
+        key = dep.strftime("%Y-%m") if dep else f"{year or 'all'}-unknown"
         monthly[key]["month"] = key
         monthly[key]["flights"] += 1
         monthly[key]["air_minutes"] += _segment_duration_min(s)
@@ -342,8 +360,9 @@ def compute_wrapped(
     elif len(segments) >= 6:
         travel_personality = "Weekend Nomad"
 
+    year_str = "All-Time" if year is None else str(year)
     cards = [
-        {"kind": "hero", "title": f"Your {year} in motion", "value": f"{len(segments)} flights"},
+        {"kind": "hero", "title": f"Your {year_str} in motion", "value": f"{len(segments)} flights"},
         {"kind": "air", "title": "Time above the clouds", "value": f"{round(flight_minutes / 60, 1)} hours"},
         {"kind": "home", "title": "Time at home", "value": f"{round(home_minutes / 60 / 24, 1)} days"},
         {"kind": "away", "title": "Time away", "value": f"{round(away_minutes / 60 / 24, 1)} days"},
@@ -356,10 +375,11 @@ def compute_wrapped(
         cards.append({"kind": "city", "title": "Most returned-to city", "value": city, "detail": f"{count} arrivals"})
 
     return {
-        "year": year,
+        "year": year or "all",
         "total_flights": len(segments),
         "total_air_minutes": flight_minutes,
         "total_air_hours": round(flight_minutes / 60, 1),
+
         "airport_minutes": airport_minutes,
         "airport_hours": round(airport_minutes / 60, 1),
         "home_minutes": home_minutes,
@@ -402,6 +422,27 @@ def derive_trips_and_stays(
     trips: list[dict] = []
     city_stays: list[dict] = []
     home = (home_airport_iata or "").upper() or None
+
+    if segments and home:
+        first_seg = segments[0]
+        first_dep = _segment_depart_dt(first_seg)
+        if first_dep:
+            start_dt = first_dep - timedelta(days=365)
+            stay_end = first_dep
+            dep_meta = lookup_airport(home) or {}
+            city_stays.append({
+                "id": f"stay_{uuid.uuid4().hex[:12]}",
+                "user_id": user_id,
+                "city_name": dep_meta.get("city") or home,
+                "airport_iata": home,
+                "country_code": dep_meta.get("country"),
+                "start_time_utc": start_dt.isoformat(),
+                "end_time_utc": stay_end.isoformat(),
+                "duration_minutes": int((stay_end - start_dt).total_seconds() / 60),
+                "is_home": True,
+                "derived_from_method": "initial_home_stay",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
 
     current_trip: dict | None = None
     current_trip_segments: list[dict] = []

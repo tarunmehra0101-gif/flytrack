@@ -76,6 +76,11 @@ export function Globe3D({ markers = [], arcs = [], className, onMarkerHover, onM
     controls.autoRotate = true;
     controls.autoRotateSpeed = 0.35;
 
+    // Stop auto-rotation instantly when the user starts dragging the globe
+    controls.addEventListener("start", () => {
+      controls.autoRotate = false;
+    });
+
     globeRef.current = globe;
     rendererRef.current = renderer;
     controlsRef.current = controls;
@@ -160,16 +165,31 @@ export function Globe3D({ markers = [], arcs = [], className, onMarkerHover, onM
       .arcAltitudeAutoScale(0.4);
   }, [markers, arcs, ready]);
 
-  // Expose hover via raycasting on points — keep simple: skip for v1
-  // (can be added via globe.onPointHover if needed)
+  // Expose hover via raycasting on points with custom pointer cursor toggles
   useEffect(() => {
     const globe = globeRef.current;
     if (!globe || !ready) return;
-    if (onMarkerHover) {
-      globe.onPointHover && globe.onPointHover(onMarkerHover);
-    }
+
+    globe.onPointHover((point, prevPoint) => {
+      const container = mountRef.current;
+      if (container) {
+        container.style.cursor = point ? "pointer" : "grab";
+      }
+      if (onMarkerHover) {
+        onMarkerHover(point, prevPoint);
+      }
+    });
+
+    globe.onLabelHover((label, prevLabel) => {
+      const container = mountRef.current;
+      if (container) {
+        container.style.cursor = label ? "pointer" : "grab";
+      }
+    });
+
     if (onMarkerClick) {
-      globe.onPointClick && globe.onPointClick(onMarkerClick);
+      globe.onPointClick(onMarkerClick);
+      globe.onLabelClick(onMarkerClick);
     }
   }, [ready, onMarkerHover, onMarkerClick]);
 

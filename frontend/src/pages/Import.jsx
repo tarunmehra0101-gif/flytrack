@@ -11,7 +11,10 @@ import BoardingPassCard from "@/components/BoardingPassCard";
 import AirlineLogo from "@/components/AirlineLogo";
 import Autocomplete from "@/components/Autocomplete";
 import { decodeBarcodeFromFile, fileToBase64, startLiveScanner, isCameraAvailable } from "@/lib/barcode";
-import { ocrImageFile } from "@/lib/ticketText";
+import { ocrImageFile, extractPdfText, loadPdfJsFromCdn } from "@/lib/ticketText";
+import { parseTicketText } from "@/lib/ticketParser";
+import { Confetti } from "@/components/ui/Confetti";
+import { AnimatedBarcodeIcon, AnimatedUploadIcon, AnimatedPlaneIcon, AnimatedSuccessIcon } from "@/components/ui/AnimatedIcons";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -83,6 +86,7 @@ export default function Import() {
   const [pasteOpen, setPasteOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
+  const [showConfetti, setShowConfetti] = useState(false);
 
   const handleFileSelection = (files) => {
     const list = Array.from(files || []);
@@ -155,6 +159,7 @@ export default function Import() {
         });
         setPreview(data);
         setStatus("preview");
+        setShowConfetti(true);
         loadHistory();
       } catch (e) {
         setError(e?.response?.data?.detail || "Could not parse the barcode.");
@@ -223,6 +228,7 @@ export default function Import() {
       }
       setPreview(mergeImportResults(results));
       setStatus("preview");
+      setShowConfetti(true);
       setUploadType(null);
       loadHistory();
     } catch (e) {
@@ -241,33 +247,98 @@ export default function Import() {
     try {
       const results = [];
       for (const file of list) {
-        const form = new FormData();
-        form.append("file", file);
-        setStatus("looking_up");
-        const { data } = await api.post("/pdf/upload", form, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
+        const pdfjs = await loadPdfJsFromCdn();
+        const buffer = await file.arrayBuffer();
+        const pdf = await pdfjs.getDocument({ data: new Uint8Array(buffer) }).promise;
+        
+        let barcodeResult = null;
+        const maxPages = Math.min(pdf.numPages, 3);
+        
+        // Scan for barcodes in the first 3 pages
+        for (let pageNo = 1; pageNo <= maxPages; pageNo++) {
+          try {
+            const page = await pdf.getPage(pageNo);
+            const viewport = page.getViewport({ scale: 2 });
+            const canvas = document.createElement("canvas");
+            const context = canvas.getContext("2d", { willReadFrequently: true });
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            await page.render({ canvasContext: context, viewport }).promise;
+            
+            const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+            if (blob) {
+              const decoded = await decodeBarcodeFromFile(blob);
+              if (decoded?.text) {
+                barcodeResult = decoded.text;
+                break;
+              }
+            }
+          } catch (e) {
+            console.log(`No barcode found on PDF page ${pageNo}:`, e);
+          }
+        }
+        
+        let data;
+        if (barcodeResult) {
+          toast.success("Boarding pass barcode decoded successfully!");
+          setStatus("looking_up");
+          const res = await api.post("/boarding-pass/ingest", {
+            barcode_string: barcodeResult,
+            enrich: true,
+          });
+          data = res.data;
+        } else {
+          toast.info("No barcode found. Extracting text to parse details...");
+          setStatus("looking_up");
+          const extractedText = await extractPdfText(file, { ocrFallback: true });
+          
+          if (!extractedText || extractedText.length < 15) {
+            throw new Error("We couldn't read any flight information from this document.");
+          }
+          
+          const parsed = await parseTicketText(extractedText, "boarding_pass_ocr");
+          
+          if (!parsed?.segments?.length) {
+            throw new Error(parsed?.message || "No flight details were found in this document.");
+          }
+          
+          data = {
+            artifact: null,
+            segment: parsed.segments[0],
+            segments: parsed.segments,
+            auto_confirmed: parsed.parser_status === "parsed" ? 1 : 0,
+            duplicates: 0,
+            enrichment_applied: true,
+            parse_confidence: parsed.parser_status === "parsed" ? 0.98 : 0.65,
+            parse_message: parsed.message || null,
+          };
+        }
+        
         results.push(data);
       }
+      
       const merged = mergeImportResults(results);
       if (!merged.segments.length) {
         setPreview(null);
-        setError(merged.parse_message || "No flight details were found in this PDF. Try a clearer ticket or add the flight manually.");
+        setError(merged.parse_message || "No flight details were found in this PDF. Try a clearer boarding pass or add the flight manually.");
         setStatus("error");
         setUploadType(null);
         loadHistory();
         toast.info("No flight details found in this PDF.");
         return;
       }
+      
       setPreview(merged);
       setStatus("preview");
+      setShowConfetti(true);
       setUploadType(null);
       loadHistory();
+      
       if (merged.segments.some((s) => (s.confidence_score ?? 0) < 0.6 || (s.missing_fields || []).length > 0)) {
         toast.info("Found some flight details. A quick review makes it perfect.");
       }
     } catch (e) {
-      setError(e?.response?.data?.detail || "Couldn't read that PDF. Try uploading a cleaner ticket.");
+      setError(e?.response?.data?.detail || e.message || "Couldn't read that PDF. Try uploading a cleaner boarding pass.");
       setStatus("error");
       setUploadType(null);
     }
@@ -287,6 +358,7 @@ export default function Import() {
       });
       setPreview(data);
       setStatus("preview");
+      setShowConfetti(true);
       loadHistory();
       setPasteText("");
     } catch (e) {
@@ -364,6 +436,7 @@ export default function Import() {
       });
       setPreview(data);
       setStatus("preview");
+      setShowConfetti(true);
       loadHistory();
       resetManualForm();
     } catch (e) {
@@ -419,6 +492,7 @@ export default function Import() {
 
   return (
     <Shell title={isOnboarding ? onboardingTitle : "Add a flight"} hideNav={isOnboarding}>
+      <Confetti active={showConfetti} onComplete={() => setShowConfetti(false)} />
       <div className="p-4 pb-10 flex flex-col gap-5 animate-fade-up" data-testid="import-page">
 
         {/* Live Scanner Overlay */}
@@ -443,92 +517,6 @@ export default function Import() {
               <button onClick={stopLiveScan} className="w-14 h-14 rounded-full bg-white/20 backdrop-blur flex items-center justify-center text-white">
                 <X size={24} />
               </button>
-            </div>
-          </div>
-        )}
-
-        {/* Main premium 3-path ingestion options */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Pathway 1: Barcode Scan */}
-          <button
-            onClick={startLiveScan}
-            disabled={isBusy}
-            className="tl-card tl-card-intense tl-card-interactive flex flex-col items-center justify-center p-6 text-center border-2 border-primary/20 hover:border-primary/60 transition-all duration-300 shadow-[0_4px_20px_-4px_rgba(37,99,235,0.15)] hover:shadow-[0_4px_30px_-2px_rgba(37,99,235,0.3)] min-h-[175px] group relative overflow-hidden text-left"
-            data-testid="live-scan-btn"
-          >
-            <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-primary/10 to-transparent rounded-bl-full pointer-events-none transition-all duration-300 group-hover:scale-110" />
-            <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-4 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3">
-              <QrCode size={26} strokeWidth={2} />
-            </div>
-            <h3 className="text-base font-bold tracking-tight text-foreground">Scan Barcode</h3>
-            <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">Live camera scanning of e-ticket or boarding pass barcodes</p>
-            <span 
-              className="text-[10px] text-primary font-medium underline underline-offset-4 mt-3 block hover:text-primary z-10 relative cursor-pointer" 
-              onClick={(e) => { e.stopPropagation(); setPasteOpen(true); }}
-              data-testid="paste-barcode-fallback"
-            >
-              Or paste barcode string
-            </span>
-          </button>
-
-          {/* Pathway 2: Upload Ticket (PDF / Image) */}
-          <button
-            onClick={() => !isBusy && fileInputRef.current?.click()}
-            disabled={isBusy}
-            className="tl-card tl-card-intense tl-card-interactive flex flex-col items-center justify-center p-6 text-center border-2 border-primary/20 hover:border-primary/60 transition-all duration-300 shadow-[0_4px_20px_-4px_rgba(37,99,235,0.15)] hover:shadow-[0_4px_30px_-2px_rgba(37,99,235,0.3)] min-h-[175px] group relative overflow-hidden"
-            data-testid="upload-cta"
-          >
-            <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-primary/10 to-transparent rounded-bl-full pointer-events-none transition-all duration-300 group-hover:scale-110" />
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="application/pdf,.pdf,image/*"
-              multiple
-              className="hidden"
-              data-testid="file-input"
-              onChange={(e) => handleFileSelection(e.target.files)}
-            />
-            {isBusy && (uploadType === "image" || uploadType === "pdf") ? (
-              <div className="flex flex-col items-center gap-3">
-                <Loader2 className="w-10 h-10 text-primary animate-spin" />
-                <p className="text-sm font-semibold">{status === "reading" ? "Reading file..." : "Analyzing ticket..."}</p>
-              </div>
-            ) : (
-              <>
-                <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-4 transition-transform duration-300 group-hover:scale-110 group-hover:-translate-y-0.5">
-                  <UploadCloud size={26} strokeWidth={2} />
-                </div>
-                <h3 className="text-base font-bold tracking-tight text-foreground">Upload Ticket</h3>
-                <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">Drop or browse PDF e-tickets, boarding pass images, or screenshots</p>
-                <span className="text-[10px] text-muted-foreground mt-3 font-mono">PDF, PNG, JPG, JPEG</span>
-              </>
-            )}
-          </button>
-
-          {/* Pathway 3: Manual Flight Entry */}
-          <button
-            onClick={() => setManualOpen(true)}
-            className="tl-card tl-card-intense tl-card-interactive flex flex-col items-center justify-center p-6 text-center border-2 border-primary/20 hover:border-primary/60 transition-all duration-300 shadow-[0_4px_20px_-4px_rgba(37,99,235,0.15)] hover:shadow-[0_4px_30px_-2px_rgba(37,99,235,0.3)] min-h-[175px] group relative overflow-hidden"
-            data-testid="manual-entry-btn"
-          >
-            <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-primary/10 to-transparent rounded-bl-full pointer-events-none transition-all duration-300 group-hover:scale-110" />
-            <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-4 transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3">
-              <PenLine size={26} strokeWidth={2} />
-            </div>
-            <h3 className="text-base font-bold tracking-tight text-foreground">Manual Entry</h3>
-            <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">Know your flight? Direct live lookup and step-by-step entry forms</p>
-            <span className="text-[10px] text-primary font-medium underline underline-offset-4 mt-3 block hover:text-primary z-10 relative cursor-pointer">
-              Fill in details
-            </span>
-          </button>
-        </div>
-
-        {error && (
-          <div className="tl-card p-3 flex items-start gap-3 border-destructive/40 bg-destructive/5" data-testid="error-banner">
-            <AlertTriangle size={16} className="text-destructive mt-0.5 flex-shrink-0" />
-            <div className="text-xs">
-              <p className="font-medium text-destructive">Something didn't work</p>
-              <p className="text-muted-foreground mt-0.5">{error}</p>
             </div>
           </div>
         )}
@@ -582,6 +570,94 @@ export default function Import() {
           </div>
         )}
 
+        {/* Main premium 3-path ingestion options */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Pathway 1: Barcode Scan */}
+          <button
+            onClick={startLiveScan}
+            disabled={isBusy}
+            className="tl-card tl-card-intense tl-card-interactive flex flex-col items-center justify-center p-6 text-center border-2 border-primary/20 hover:border-primary/60 transition-all duration-300 shadow-[0_4px_20px_-4px_rgba(37,99,235,0.15)] hover:shadow-[0_4px_30px_-2px_rgba(37,99,235,0.3)] min-h-[175px] group relative overflow-hidden text-left"
+            data-testid="live-scan-btn"
+          >
+            <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-primary/10 to-transparent rounded-bl-full pointer-events-none transition-all duration-300 group-hover:scale-110" />
+            <div className="mb-4 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3">
+              <AnimatedBarcodeIcon size={56} />
+            </div>
+            <h3 className="text-base font-bold tracking-tight text-foreground">Scan Barcode</h3>
+            <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">Live camera scanning of e-ticket or boarding pass barcodes</p>
+            <span 
+              className="text-[10px] text-primary font-medium underline underline-offset-4 mt-3 block hover:text-primary z-10 relative cursor-pointer" 
+              onClick={(e) => { e.stopPropagation(); setPasteOpen(true); }}
+              data-testid="paste-barcode-fallback"
+            >
+              Or paste barcode string
+            </span>
+          </button>
+
+          {/* Pathway 2: Upload Boarding Pass (PDF / Image) */}
+          <button
+            onClick={() => !isBusy && fileInputRef.current?.click()}
+            disabled={isBusy}
+            className="tl-card tl-card-intense tl-card-interactive flex flex-col items-center justify-center p-6 text-center border-2 border-primary/20 hover:border-primary/60 transition-all duration-300 shadow-[0_4px_20px_-4px_rgba(37,99,235,0.15)] hover:shadow-[0_4px_30px_-2px_rgba(37,99,235,0.3)] min-h-[175px] group relative overflow-hidden"
+            data-testid="upload-cta"
+          >
+            <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-primary/10 to-transparent rounded-bl-full pointer-events-none transition-all duration-300 group-hover:scale-110" />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/pdf,.pdf,image/*"
+              multiple
+              className="hidden"
+              data-testid="file-input"
+              onChange={(e) => handleFileSelection(e.target.files)}
+            />
+            {isBusy && (uploadType === "image" || uploadType === "pdf") ? (
+              <div className="flex flex-col items-center gap-3">
+                <Loader2 className="w-10 h-10 text-primary animate-spin" />
+                <p className="text-sm font-semibold">{status === "reading" ? "Reading file..." : "Analyzing ticket..."}</p>
+              </div>
+            ) : (
+              <>
+                <div className="mb-4 transition-transform duration-300 group-hover:scale-110 group-hover:-translate-y-0.5">
+                  <AnimatedUploadIcon size={56} />
+                </div>
+                <h3 className="text-base font-bold tracking-tight text-foreground">Upload Boarding Pass</h3>
+                <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">Drop or browse boarding pass PDFs, ticket images, or screenshots</p>
+                <span className="text-[10px] text-muted-foreground mt-3 font-mono">PDF, PNG, JPG, JPEG</span>
+              </>
+            )}
+          </button>
+
+          {/* Pathway 3: Manual Flight Entry */}
+          <button
+            onClick={() => setManualOpen(true)}
+            className="tl-card tl-card-intense tl-card-interactive flex flex-col items-center justify-center p-6 text-center border-2 border-primary/20 hover:border-primary/60 transition-all duration-300 shadow-[0_4px_20px_-4px_rgba(37,99,235,0.15)] hover:shadow-[0_4px_30px_-2px_rgba(37,99,235,0.3)] min-h-[175px] group relative overflow-hidden"
+            data-testid="manual-entry-btn"
+          >
+            <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-primary/10 to-transparent rounded-bl-full pointer-events-none transition-all duration-300 group-hover:scale-110" />
+            <div className="mb-4 transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3">
+              <AnimatedPlaneIcon size={56} />
+            </div>
+            <h3 className="text-base font-bold tracking-tight text-foreground">Manual Entry</h3>
+            <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">Know your flight? Direct live lookup and step-by-step entry forms</p>
+            <span className="text-[10px] text-primary font-medium underline underline-offset-4 mt-3 block hover:text-primary z-10 relative cursor-pointer">
+              Fill in details
+            </span>
+          </button>
+        </div>
+
+        {error && (
+          <div className="tl-card p-3 flex items-start gap-3 border-destructive/40 bg-destructive/5" data-testid="error-banner">
+            <AlertTriangle size={16} className="text-destructive mt-0.5 flex-shrink-0" />
+            <div className="text-xs">
+              <p className="font-medium text-destructive">Something didn't work</p>
+              <p className="text-muted-foreground mt-0.5">{error}</p>
+            </div>
+          </div>
+        )}
+
+
+
         {/* Upload history */}
         {history.length > 0 && (
           <div className="flex flex-col gap-2" data-testid="history-section">
@@ -632,16 +708,16 @@ export default function Import() {
 
       {/* Add-by-flight-number dialog */}
       <Dialog open={manualOpen} onOpenChange={(v) => { if (!v) resetManualForm(); setManualOpen(v); }}>
-        <DialogContent className="max-w-[400px]">
-          <DialogHeader>
+        <DialogContent className="max-w-[450px] w-[95vw] max-h-[90vh] flex flex-col p-6">
+          <DialogHeader className="pb-2">
             <DialogTitle>Add a flight</DialogTitle>
             <DialogDescription>Select an airline, enter your flight number, and we'll fill in the rest.</DialogDescription>
           </DialogHeader>
 
-          <div className="flex flex-col gap-4">
+          <div className="flex-1 overflow-y-auto pr-1.5 py-1 flex flex-col gap-4 max-h-[58vh] sm:max-h-[62vh] no-scrollbar">
             {/* Step 1: Airline */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] text-muted-foreground font-medium">Airline</label>
+              <label className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Airline</label>
               <Autocomplete
                 kind="airline"
                 value={mAirline}
@@ -660,7 +736,7 @@ export default function Import() {
 
             {/* Step 2: Flight number */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] text-muted-foreground font-medium">Flight number</label>
+              <label className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Flight number</label>
               <Input
                 data-testid="manual-flight-number"
                 placeholder={mAirline ? `e.g. ${mAirline.iata}505` : "e.g. AI505"}
@@ -714,71 +790,55 @@ export default function Import() {
               </div>
             )}
 
-            {/* Step 3: Route (manual if not fetched) */}
-            {(!mFetched?.found && mFetched) && (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-muted-foreground font-medium">From</label>
-                  <Autocomplete kind="airport" value={mFrom} onSelect={setMFrom} testId="manual-from-ac" placeholder="City or IATA" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-muted-foreground font-medium">To</label>
-                  <Autocomplete kind="airport" value={mTo} onSelect={setMTo} testId="manual-to-ac" placeholder="City or IATA" />
-                </div>
+            {/* Step 3: Route */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">From</label>
+                <Autocomplete kind="airport" value={mFrom} onSelect={setMFrom} testId="manual-from-ac" placeholder="City or IATA" />
               </div>
-            )}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">To</label>
+                <Autocomplete kind="airport" value={mTo} onSelect={setMTo} testId="manual-to-ac" placeholder="City or IATA" />
+              </div>
+            </div>
 
             {/* Step 4: Date & Time */}
-            {(mFetched?.found || mFrom || mTo || (mAirline && mFlightNumber)) && (
-              <>
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="flex flex-col gap-1.5 col-span-1">
-                    <label className="text-[10px] text-muted-foreground font-medium">Date</label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <button
-                          type="button"
-                          className={`flex h-9 w-full rounded-xl border border-input bg-transparent px-3 py-2 text-xs text-left justify-between items-center focus:outline-none focus:ring-1 focus:ring-ring ${mDate ? "text-foreground" : "text-muted-foreground"}`}
-                          data-testid="manual-date"
-                        >
-                          <span>{mDate ? format(parse(mDate, "yyyy-MM-dd", new Date()), "dd/MM/yyyy") : "Select date"}</span>
-                          <CalendarDays size={13} className="text-muted-foreground" />
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={mDate ? parse(mDate, "yyyy-MM-dd", new Date()) : undefined}
-                          onSelect={(date) => {
-                            if (date) {
-                              setMDate(format(date, "yyyy-MM-dd"));
-                            } else {
-                              setMDate("");
-                            }
-                          }}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] text-muted-foreground flex items-center gap-1 font-medium"><Clock size={9} /> Departure</label>
-                    <Input data-testid="manual-dep-time" type="time" value={mDepTime} onChange={(e) => setMDepTime(e.target.value)} placeholder="09:00" autoComplete="off" />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] text-muted-foreground flex items-center gap-1 font-medium"><Clock size={9} /> Arrival</label>
-                    <Input data-testid="manual-arr-time" type="time" value={mArrTime} onChange={(e) => setMArrTime(e.target.value)} placeholder="12:30" autoComplete="off" />
-                  </div>
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Date</label>
+                <Input
+                  type="date"
+                  data-testid="manual-date"
+                  value={mDate}
+                  onChange={(e) => setMDate(e.target.value)}
+                  className="h-9 block w-full text-xs"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-muted-foreground flex items-center gap-1 font-medium uppercase tracking-wider"><Clock size={9} /> Departure</label>
+                <Input data-testid="manual-dep-time" type="time" value={mDepTime} onChange={(e) => setMDepTime(e.target.value)} placeholder="09:00" autoComplete="off" className="h-9 text-xs" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-muted-foreground flex items-center gap-1 font-medium uppercase tracking-wider"><Clock size={9} /> Arrival</label>
+                <Input data-testid="manual-arr-time" type="time" value={mArrTime} onChange={(e) => setMArrTime(e.target.value)} placeholder="12:30" autoComplete="off" className="h-9 text-xs" />
+              </div>
+            </div>
 
-                {/* Step 5: Optional details */}
-                <div className="grid grid-cols-2 gap-2">
-                  <Input data-testid="manual-pnr" placeholder="PNR / Booking ref" value={mPnr} onChange={(e) => setMPnr(e.target.value)} autoComplete="off" />
-                  <Input data-testid="manual-seat" placeholder="Seat (optional)" value={mSeat} onChange={(e) => setMSeat(e.target.value)} autoComplete="off" />
-                </div>
-                <Input data-testid="manual-passenger" placeholder="Passenger name (optional)" value={mPassenger} onChange={(e) => setMPassenger(e.target.value)} autoComplete="off" />
-              </>
-            )}
+            {/* Step 5: Optional details */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">PNR / Ref</label>
+                <Input data-testid="manual-pnr" placeholder="Booking ref" value={mPnr} onChange={(e) => setMPnr(e.target.value)} autoComplete="off" className="h-9 text-xs" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Seat</label>
+                <Input data-testid="manual-seat" placeholder="Seat" value={mSeat} onChange={(e) => setMSeat(e.target.value)} autoComplete="off" className="h-9 text-xs" />
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Passenger Name</label>
+              <Input data-testid="manual-passenger" placeholder="Passenger name (optional)" value={mPassenger} onChange={(e) => setMPassenger(e.target.value)} autoComplete="off" className="h-9 text-xs" />
+            </div>
           </div>
 
           <DialogFooter>

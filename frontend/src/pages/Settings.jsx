@@ -305,7 +305,7 @@ export default function Settings() {
 
         <div className="flex items-center justify-center gap-2 mt-2 text-[11px] text-muted-foreground">
           <Plane size={11} className="text-primary" />
-          Ryoko v2.2 · 旅行 · Built with ❤️
+          Ryoko v2.3 · 旅行 · Built with ❤️
         </div>
       </div>
     </Shell>

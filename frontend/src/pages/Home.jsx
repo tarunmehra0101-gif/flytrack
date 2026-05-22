@@ -14,7 +14,21 @@ import CountUp from "@/components/CountUp";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import FlightMap from "@/components/FlightMap";
+import MapLibreTravelMap from "@/components/MapLibreTravelMap";
+import {
+  AnimatedGlobeIcon,
+  AnimatedPlaneIcon,
+  AnimatedBarcodeIcon,
+  AnimatedUploadIcon,
+  AnimatedSuccessIcon,
+  AnimatedClockIcon,
+  AnimatedHomeIcon,
+  AnimatedBuildingIcon,
+  AnimatedTrophyIcon,
+  AnimatedRouteIcon,
+  AnimatedMapPinIcon,
+  AnimatedSparklesIcon
+} from "@/components/ui/AnimatedIcons";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const COLORS = ["hsl(var(--primary))", "hsl(var(--muted-foreground))", "#38bdf8"];
@@ -23,7 +37,7 @@ const KpiTile = ({ label, value, suffix = "", icon: Icon, decimals = 0, testId, 
   <div className="tl-card tl-card-intense tl-card-interactive p-4 flex flex-col justify-between h-28" data-testid={testId}>
     <div className="flex items-center justify-between">
       <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{label}</span>
-      {Icon && <Icon size={14} className={iconClass || "text-muted-foreground"} />}
+      {Icon && <Icon size={24} className={iconClass || "text-muted-foreground"} />}
     </div>
     <p className="text-3xl tl-number mt-auto">
       <CountUp value={value} decimals={decimals} suffix={suffix} />
@@ -32,25 +46,102 @@ const KpiTile = ({ label, value, suffix = "", icon: Icon, decimals = 0, testId, 
   </div>
 );
 
-const InsightVisualCard = ({ title, detail, icon: Icon, tone = "emerald", metric }) => (
-  <motion.div
-    initial={{ opacity: 0, y: 12, scale: 0.98 }}
-    whileInView={{ opacity: 1, y: 0, scale: 1 }}
-    viewport={{ once: true, amount: 0.35 }}
-    transition={{ duration: 0.35 }}
-    className={`tl-insight-card tl-insight-${tone}`}
-  >
-    <div className="tl-insight-graphic" aria-hidden>
-      <span className="tl-insight-ring" />
-      <Icon size={34} strokeWidth={1.7} />
-    </div>
-    <div className="relative z-10 min-w-0">
-      <p className="text-[10px] uppercase tracking-[0.18em] text-white/55">{title}</p>
-      {metric && <p className="tl-number text-3xl leading-none mt-2">{metric}</p>}
-      <p className="text-sm text-white/86 leading-snug mt-2">{detail}</p>
-    </div>
-  </motion.div>
-);
+const glowShadows = {
+  emerald: "shadow-[0_8px_30px_rgba(16,185,129,0.18)] border-emerald-500/30",
+  gold: "shadow-[0_8px_30px_rgba(245,158,11,0.18)] border-amber-500/30",
+  sky: "shadow-[0_8px_30px_rgba(14,165,233,0.18)] border-sky-500/30",
+  violet: "shadow-[0_8px_30px_rgba(139,92,246,0.18)] border-violet-500/30",
+  rose: "shadow-[0_8px_30px_rgba(244,63,94,0.18)] border-rose-500/30",
+};
+
+const InsightVisualCard = ({ title, detail, icon: Icon, tone = "emerald", metric }) => {
+  const glowClass = glowShadows[tone] || "shadow-[0_8px_30px_rgba(255,255,255,0.05)] border-white/10";
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12, scale: 0.98 }}
+      whileInView={{ opacity: 1, y: 0, scale: 1 }}
+      viewport={{ once: true, amount: 0.35 }}
+      transition={{ duration: 0.35 }}
+      className={`tl-insight-card tl-insight-${tone} border ${glowClass} backdrop-blur-md`}
+    >
+      <div className="tl-insight-graphic" aria-hidden>
+        <span className="tl-insight-ring" />
+        <Icon size={42} />
+      </div>
+      <div className="relative z-10 min-w-0">
+        <p className="text-[10px] uppercase tracking-[0.18em] text-white/55">{title}</p>
+        {metric && <p className="tl-number text-3xl leading-none mt-2 font-semibold text-white">{metric}</p>}
+        <p className="text-sm text-white/90 leading-snug mt-2.5">{detail}</p>
+      </div>
+    </motion.div>
+  );
+};
+
+const CustomChartTooltip = ({ active, payload }) => {
+  if (active && payload && payload.length && payload[0]) {
+    const data = payload[0].payload;
+    if (!data || !data.month) return null;
+    const dateObj = new Date(data.month + "-02"); // Add day to avoid timezone issue
+    if (isNaN(dateObj.getTime())) return null;
+    const monthName = MONTHS[dateObj.getMonth()];
+    const year = dateObj.getFullYear();
+
+    const flights = data.flights;
+    const airMinutes = data.air_minutes || 0;
+    const hours = Math.floor(airMinutes / 60);
+    const mins = Math.round(airMinutes % 60);
+    return (
+      <div className="tl-card p-3 shadow-lg border border-primary/20 backdrop-blur-md bg-background/90 text-sm flex flex-col gap-1.5 animate-fade-up z-50">
+        <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">{monthName} {year}</p>
+        <div className="flex items-center justify-between gap-6 mt-1">
+          <span className="text-foreground/80 flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary" /> Flights:
+          </span>
+          <span className="font-semibold">{flights}</span>
+        </div>
+        {airMinutes > 0 && (
+          <div className="flex items-center justify-between gap-6">
+            <span className="text-foreground/80 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-sky-400" /> Air time:
+            </span>
+            <span className="font-semibold text-sky-400">
+              {hours > 0 ? `${hours}h ` : ""}{mins}m
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  }
+  return null;
+};
+
+const CustomPieTooltip = ({ active, payload }) => {
+  if (active && payload && payload.length && payload[0]) {
+    const data = payload[0];
+    if (!data || !data.payload) return null;
+    const name = data.name;
+    const value = data.value; // value is in minutes
+    const days = (value / (60 * 24)).toFixed(1);
+    const hours = (value / 60).toFixed(1);
+    let displayValue = `${days} days`;
+    if (name === "In air") {
+      displayValue = `${hours} hours`;
+    }
+    const color = data.payload.fill || "hsl(var(--primary))";
+    return (
+      <div className="tl-card p-3 shadow-lg border border-border/60 backdrop-blur-md bg-background/90 text-sm flex flex-col gap-1.5 animate-fade-up z-50">
+        <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Category</p>
+        <div className="flex items-center justify-between gap-6 mt-1">
+          <span className="text-foreground/80 flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} /> {name}:
+          </span>
+          <span className="font-semibold" style={{ color: color }}>{displayValue}</span>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
 
 const ActionTile = ({ icon: Icon, title, desc, onClick, testId }) => (
   <button onClick={onClick} className="tl-action-tile" data-testid={testId}>
@@ -184,10 +275,10 @@ function EmptyDashboard({ navigate, hello }) {
 
       {/* Stats preview (zeroed) */}
       <div className="grid grid-cols-2 gap-3">
-        <KpiTile testId="kpi-flights" label="Flights" value={0} icon={Plane} subtext="Your journeys start here" />
-        <KpiTile testId="kpi-hours" label="Time in the sky" value={0} icon={Clock4} subtext="Waiting to take off" />
-        <KpiTile testId="kpi-home-days" label="Home base" value={0} icon={HomeIcon} subtext="We'll track this for you" />
-        <KpiTile testId="kpi-away-days" label="Days exploring" value={0} icon={Building2} subtext="Adventures await" />
+        <KpiTile testId="kpi-flights" label="Flights" value={0} icon={AnimatedPlaneIcon} subtext="Your journeys start here" />
+        <KpiTile testId="kpi-hours" label="Time in the sky" value={0} icon={AnimatedClockIcon} subtext="Waiting to take off" />
+        <KpiTile testId="kpi-home-days" label="Home base" value={0} icon={AnimatedHomeIcon} subtext="We'll track this for you" />
+        <KpiTile testId="kpi-away-days" label="Days exploring" value={0} icon={AnimatedBuildingIcon} subtext="Adventures await" />
       </div>
     </div>
   );
@@ -276,17 +367,18 @@ export default function Home() {
                 <Sparkles size={13} />
                 <span className="text-[10px] uppercase tracking-[0.22em]">Your journey so far</span>
               </div>
-              <p className="text-[26px] font-light leading-tight tracking-tight mt-2">
-                You've spent{" "}
+              <div className="text-[26px] font-light leading-tight tracking-tight mt-2 flex items-center flex-wrap gap-x-2">
+                <span>You've spent</span>{" "}
                 <span className="font-semibold text-primary">
                   <CountUp value={data?.total_air_hours || 0} decimals={1} suffix=" hours" />
                 </span>{" "}
-                above the clouds across{" "}
+                <span>above the clouds across</span>{" "}
                 <span className="font-semibold">
                   <CountUp value={data?.total_flights || 0} />
                 </span>{" "}
-                flights ✈️
-              </p>
+                <span>flights</span>
+                <span className="inline-flex items-center transform -rotate-12"><AnimatedPlaneIcon size={28} /></span>
+              </div>
               {rotatedInsight && (
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{rotatedInsight}</p>
               )}
@@ -322,14 +414,14 @@ export default function Home() {
               className="tl-card tl-card-intense tl-card-interactive overflow-hidden text-left group"
               data-testid="home-map-preview"
             >
-              <div className="relative h-48 overflow-hidden rounded-t-2xl">
-                <FlightMap
-                  routes={mapRoutes.routes}
-                  markers={mapRoutes.markers}
-                  interactive={false}
-                  className="h-48"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent pointer-events-none" />
+              <div className="relative h-48 overflow-hidden rounded-t-2xl pointer-events-none">
+                <div className="absolute inset-0 w-full h-full">
+                  <MapLibreTravelMap
+                    mapData={{ routes: mapRoutes.routes, airport_markers: mapRoutes.markers }}
+                    selectedYear="All"
+                  />
+                </div>
+                <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
               </div>
               <div className="p-4 -mt-6 relative z-10 flex items-center justify-between">
                 <div>
@@ -345,10 +437,10 @@ export default function Home() {
 
           {/* KPI grid */}
           <div className="grid grid-cols-2 gap-3">
-            <KpiTile testId="kpi-flights" label="Flights taken" value={data?.total_flights || 0} icon={Plane} subtext={`${data?.cities_visited || 0} cities explored`} />
-            <KpiTile testId="kpi-hours" label="Time in the sky" value={Math.round(data?.total_air_hours || 0)} icon={Clock4} subtext={`${airPct}% of your year airborne`} />
-            <KpiTile testId="kpi-home-days" label="Home base" value={Math.round(data?.home_days || 0)} icon={HomeIcon} subtext={`${homePct}% cozy at home`} />
-            <KpiTile testId="kpi-away-days" label="Days exploring" value={Math.round(data?.away_days || 0)} icon={Building2} subtext={`${awayPct}% out discovering`} />
+            <KpiTile testId="kpi-flights" label="Flights taken" value={data?.total_flights || 0} icon={AnimatedPlaneIcon} subtext={`${data?.cities_visited || 0} cities explored`} />
+            <KpiTile testId="kpi-hours" label="Time in the sky" value={Math.round(data?.total_air_hours || 0)} icon={AnimatedClockIcon} subtext={`${airPct}% of your year airborne`} />
+            <KpiTile testId="kpi-home-days" label="Home base" value={Math.round(data?.home_days || 0)} icon={AnimatedHomeIcon} subtext={`${homePct}% cozy at home`} />
+            <KpiTile testId="kpi-away-days" label="Days exploring" value={Math.round(data?.away_days || 0)} icon={AnimatedBuildingIcon} subtext={`${awayPct}% out discovering`} />
           </div>
 
           {/* Home vs away ring */}
@@ -368,6 +460,7 @@ export default function Home() {
               <div className="h-36">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
+                    <Tooltip content={<CustomPieTooltip />} />
                     <Pie data={balanceData} innerRadius={44} outerRadius={62} paddingAngle={2} dataKey="value" stroke="none">
                       {balanceData.map((entry, index) => <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />)}
                     </Pie>
@@ -400,7 +493,7 @@ export default function Home() {
                     <XAxis dataKey="month" tickFormatter={(v) => MONTHS[Math.max(0, Math.min(11, Number(String(v).slice(-2)) - 1))] || v} tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
                     <YAxis hide />
                     <Tooltip
-                      contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 12 }}
+                      content={<CustomChartTooltip />}
                       cursor={{ stroke: "hsl(var(--primary))", strokeOpacity: 0.3 }}
                     />
                     <Area type="monotone" dataKey="flights" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#gradEm)" />
@@ -514,11 +607,11 @@ export default function Home() {
                 <p className="text-[10px] uppercase tracking-[0.22em]">Insights</p>
               </div>
               <div className="grid grid-cols-1 gap-3">
-                <InsightVisualCard title="Above the clouds" metric={`${Math.round(data.total_air_hours || 0)}h`} detail={data.insights[0]} icon={Plane} tone="emerald" />
-                <InsightVisualCard title="Home gravity" metric={`${Math.round(data.home_days || 0)}d`} detail={data.insights[1] || `${profile?.home_city_name || "Home"} anchors your year.`} icon={HomeIcon} tone="gold" />
-                <InsightVisualCard title="Airport time" metric={`${Math.round(data.airport_hours || 0)}h`} detail={data.insights[2] || "Airport time is tracked as an estimate until exact check-in data is available."} icon={Timer} tone="sky" />
-                {data.top_route && <InsightVisualCard title="Route loop" metric={data.top_route} detail={`${data.top_route_count} flights on your most repeated route.`} icon={Route} tone="violet" />}
-                {data.insights[3] && <InsightVisualCard title="Travel rhythm" detail={data.insights[3]} icon={Trophy} tone="rose" />}
+                <InsightVisualCard title="Above the clouds" metric={`${Math.round(data.total_air_hours || 0)}h`} detail={data.insights[0]} icon={AnimatedPlaneIcon} tone="emerald" />
+                <InsightVisualCard title="Home gravity" metric={`${Math.round(data.home_days || 0)}d`} detail={data.insights[1] || `${profile?.home_city_name || "Home"} anchors your year.`} icon={AnimatedHomeIcon} tone="gold" />
+                <InsightVisualCard title="Airport time" metric={`${Math.round(data.airport_hours || 0)}h`} detail={data.insights[2] || "Airport time is tracked as an estimate until exact check-in data is available."} icon={AnimatedClockIcon} tone="sky" />
+                {data.top_route && <InsightVisualCard title="Route loop" metric={data.top_route} detail={`${data.top_route_count} flights on your most repeated route.`} icon={AnimatedRouteIcon} tone="violet" />}
+                {data.insights[3] && <InsightVisualCard title="Travel rhythm" detail={data.insights[3]} icon={AnimatedTrophyIcon} tone="rose" />}
               </div>
             </div>
           )}

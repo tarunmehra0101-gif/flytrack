@@ -15,8 +15,8 @@ function routeFeature(route) {
     geometry: {
       type: "LineString",
       coordinates: [
-        [route.from.lng, route.from.lat],
-        [route.to.lng, route.to.lat],
+        [parseFloat(route.from.lng), parseFloat(route.from.lat)],
+        [parseFloat(route.to.lng), parseFloat(route.to.lat)],
       ],
     },
   };
@@ -35,15 +35,17 @@ function airportFeature(airport) {
     },
     geometry: {
       type: "Point",
-      coordinates: [airport.lng, airport.lat],
+      coordinates: [parseFloat(airport.lng), parseFloat(airport.lat)],
     },
   };
 }
+
 
 export default function MapLibreTravelMap({ mapData, selectedYear }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const [selected, setSelected] = useState(null);
+  const [webGlSupported, setWebGlSupported] = useState(true);
 
   const geojson = useMemo(() => ({
     airports: {
@@ -58,68 +60,83 @@ export default function MapLibreTravelMap({ mapData, selectedYear }) {
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
-    mapRef.current = new maplibregl.Map({
-      container: containerRef.current,
-      style: process.env.REACT_APP_MAPLIBRE_STYLE_URL || "https://demotiles.maplibre.org/style.json",
-      center: [78.9629, 22.5937],
-      zoom: 2.8,
-      attributionControl: false,
-    });
-    mapRef.current.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
-    mapRef.current.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
 
-    mapRef.current.on("load", () => {
-      const map = mapRef.current;
-      map.addSource("ryoko-routes", { type: "geojson", data: geojson.routes });
-      map.addSource("ryoko-airports", { type: "geojson", data: geojson.airports });
-      map.addLayer({
-        id: "ryoko-routes-glow",
-        type: "line",
-        source: "ryoko-routes",
-        paint: {
-          "line-color": "#10b981",
-          "line-width": ["interpolate", ["linear"], ["get", "count"], 1, 4, 6, 12],
-          "line-opacity": 0.22,
-          "line-blur": 4,
-        },
+    if (typeof maplibregl?.supported !== "function" || !maplibregl.supported()) {
+      console.warn("MapLibre GL is not supported on this device/browser.");
+      setWebGlSupported(false);
+      return;
+    }
+
+
+    try {
+      mapRef.current = new maplibregl.Map({
+        container: containerRef.current,
+        style: process.env.REACT_APP_MAPLIBRE_STYLE_URL || "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
+        center: [78.9629, 22.5937],
+        zoom: 2.8,
+        attributionControl: false,
       });
-      map.addLayer({
-        id: "ryoko-routes",
-        type: "line",
-        source: "ryoko-routes",
-        paint: {
-          "line-color": "#67e8f9",
-          "line-width": ["interpolate", ["linear"], ["get", "count"], 1, 1.4, 6, 4],
-          "line-opacity": 0.82,
-        },
+      mapRef.current.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
+      mapRef.current.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
+
+      mapRef.current.on("load", () => {
+        const map = mapRef.current;
+        if (!map) return;
+        map.addSource("ryoko-routes", { type: "geojson", data: geojson.routes });
+        map.addSource("ryoko-airports", { type: "geojson", data: geojson.airports });
+        map.addLayer({
+          id: "ryoko-routes-glow",
+          type: "line",
+          source: "ryoko-routes",
+          paint: {
+            "line-color": "#10b981",
+            "line-width": ["interpolate", ["linear"], ["get", "count"], 1, 4, 6, 12],
+            "line-opacity": 0.22,
+            "line-blur": 4,
+          },
+        });
+        map.addLayer({
+          id: "ryoko-routes",
+          type: "line",
+          source: "ryoko-routes",
+          paint: {
+            "line-color": "#67e8f9",
+            "line-width": ["interpolate", ["linear"], ["get", "count"], 1, 1.4, 6, 4],
+            "line-opacity": 0.82,
+          },
+        });
+        map.addLayer({
+          id: "ryoko-airports",
+          type: "circle",
+          source: "ryoko-airports",
+          paint: {
+            "circle-radius": ["interpolate", ["linear"], ["get", "count"], 1, 5, 8, 12],
+            "circle-color": ["case", ["get", "is_home"], "#10b981", "#38bdf8"],
+            "circle-stroke-color": "#ffffff",
+            "circle-stroke-width": 1,
+            "circle-opacity": 0.92,
+          },
+        });
+        map.on("click", "ryoko-airports", (event) => {
+          const feature = event.features?.[0];
+          if (!feature) return;
+          setSelected({ type: "airport", ...feature.properties });
+        });
+        map.on("click", "ryoko-routes", (event) => {
+          const feature = event.features?.[0];
+          if (!feature) return;
+          setSelected({ type: "route", ...feature.properties });
+        });
+        ["ryoko-airports", "ryoko-routes"].forEach((layer) => {
+          map.on("mouseenter", layer, () => { map.getCanvas().style.cursor = "pointer"; });
+          map.on("mouseleave", layer, () => { map.getCanvas().style.cursor = ""; });
+        });
       });
-      map.addLayer({
-        id: "ryoko-airports",
-        type: "circle",
-        source: "ryoko-airports",
-        paint: {
-          "circle-radius": ["interpolate", ["linear"], ["get", "count"], 1, 5, 8, 12],
-          "circle-color": ["case", ["get", "is_home"], "#10b981", "#38bdf8"],
-          "circle-stroke-color": "#ffffff",
-          "circle-stroke-width": 1,
-          "circle-opacity": 0.92,
-        },
-      });
-      map.on("click", "ryoko-airports", (event) => {
-        const feature = event.features?.[0];
-        if (!feature) return;
-        setSelected({ type: "airport", ...feature.properties });
-      });
-      map.on("click", "ryoko-routes", (event) => {
-        const feature = event.features?.[0];
-        if (!feature) return;
-        setSelected({ type: "route", ...feature.properties });
-      });
-      ["ryoko-airports", "ryoko-routes"].forEach((layer) => {
-        map.on("mouseenter", layer, () => { map.getCanvas().style.cursor = "pointer"; });
-        map.on("mouseleave", layer, () => { map.getCanvas().style.cursor = ""; });
-      });
-    });
+    } catch (err) {
+      console.error("Failed to initialize MapLibre map:", err);
+      setWebGlSupported(false);
+    }
+
     return () => {
       mapRef.current?.remove();
       mapRef.current = null;
@@ -144,6 +161,44 @@ export default function MapLibreTravelMap({ mapData, selectedYear }) {
     if (map.loaded()) update();
     else map.once("load", update);
   }, [geojson]);
+
+  if (!webGlSupported) {
+    return (
+      <div className="relative h-full w-full flex flex-col items-center justify-center p-6 bg-black/60 backdrop-blur-md border border-white/10 text-center rounded-2xl overflow-hidden min-h-[300px]">
+        <div className="absolute -top-10 -left-10 w-40 h-40 rounded-full bg-primary/10 blur-[40px] pointer-events-none" />
+        <div className="absolute -bottom-10 -right-10 w-40 h-40 rounded-full bg-sky-500/10 blur-[40px] pointer-events-none" />
+        
+        <div className="z-10 flex flex-col items-center gap-3">
+          <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-2 border border-primary/20 animate-pulse">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498 4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.246a1.5 1.5 0 0 0-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0Z" />
+            </svg>
+          </div>
+          <h3 className="text-sm font-semibold text-white/90">Interactive Map Preview</h3>
+          <p className="text-xs text-white/50 max-w-[260px] leading-relaxed">
+            WebGL is not supported or hardware acceleration is disabled on this device.
+          </p>
+          
+          {mapData && (
+            <div className="mt-4 flex flex-col gap-2 w-full max-w-[240px] text-left text-xs bg-white/5 border border-white/10 rounded-xl p-3">
+              <div className="flex justify-between">
+                <span className="text-white/40">Total flights:</span>
+                <span className="text-white/90 font-mono font-semibold">{mapData.total_flights || 0}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-white/40">Airports visited:</span>
+                <span className="text-white/90 font-mono font-semibold">{(mapData.airport_markers || []).length}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-white/40">Unique routes:</span>
+                <span className="text-white/90 font-mono font-semibold">{(mapData.routes || []).length}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative h-full w-full">

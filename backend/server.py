@@ -139,9 +139,9 @@ def _canonical_hash(segment: dict) -> str:
         (segment.get("departure_airport_iata") or "").upper(),
         (segment.get("arrival_airport_iata") or "").upper(),
         (segment.get("departure_time_utc") or segment.get("flight_date") or "")[:10],
-        (segment.get("booking_reference") or "").upper(),
     ])
     return hashlib.sha256(key.encode()).hexdigest()
+
 
 
 def _normalize_from_bcbp_leg(leg: dict, user_id: str, artifact_id: str, confidence: float, sequence_index: int = 0) -> dict:
@@ -316,8 +316,21 @@ async def _confirm_segment_doc(seg: dict, user_id: str, recompute: bool = True) 
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat(),
     })
-    await db.confirmed_segments.insert_one(confirmed)
-    confirmed.pop("_id", None)
+    res = await db.confirmed_segments.update_one(
+        {"user_id": user_id, "source_parsed_segment_id": seg["id"]},
+        {"$setOnInsert": confirmed},
+        upsert=True
+    )
+    if res.matched_count > 0:
+        existing = await db.confirmed_segments.find_one(
+            {"user_id": user_id, "source_parsed_segment_id": seg["id"]},
+            {"_id": 0}
+        )
+        if existing:
+            confirmed = existing
+    else:
+        confirmed.pop("_id", None)
+
     await db.parsed_segments.update_one(
         {"id": seg["id"], "user_id": user_id},
         {"$set": {"status": "confirmed" if not existing_dup else "duplicate"}},
@@ -328,7 +341,35 @@ async def _confirm_segment_doc(seg: dict, user_id: str, recompute: bool = True) 
 
 
 async def _recompute_for_user(user_id: str) -> dict:
-    confirmed = await db.confirmed_segments.find({"user_id": user_id, "status": "confirmed"}, {"_id": 0}).to_list(2000)
+    raw_confirmed = await db.confirmed_segments.find(
+        {"user_id": user_id, "status": "confirmed"},
+        {"_id": 0}
+    ).sort("created_at", 1).to_list(2000)
+    
+    confirmed = []
+    seen_hashes = set()
+    duplicates_to_demote = []
+    
+    for s in raw_confirmed:
+        h = _canonical_hash(s)
+        if h in seen_hashes:
+            duplicates_to_demote.append(s["id"])
+        else:
+            seen_hashes.add(h)
+            confirmed.append(s)
+            if s.get("canonical_hash") != h:
+                await db.confirmed_segments.update_one(
+                    {"id": s["id"]},
+                    {"$set": {"canonical_hash": h}}
+                )
+            
+    if duplicates_to_demote:
+        await db.confirmed_segments.update_many(
+            {"id": {"$in": duplicates_to_demote}, "user_id": user_id},
+            {"$set": {"status": "duplicate"}}
+        )
+
+
     profile = await db.user_profiles.find_one({"user_id": user_id}, {"_id": 0}) or {}
     trips, stays = derive_trips_and_stays(user_id, confirmed, profile.get("home_airport_iata"))
     await db.trips.delete_many({"user_id": user_id})
@@ -1062,8 +1103,16 @@ async def dashboard(user: dict = Depends(_auth)):
 
 
 @api.get("/wrapped")
-async def wrapped(year: Optional[int] = None, user: dict = Depends(_auth)):
-    selected_year = year or datetime.now(timezone.utc).year
+async def wrapped(year: Optional[str] = None, user: dict = Depends(_auth)):
+    selected_year = None
+    if year and year != "all":
+        try:
+            selected_year = int(year)
+        except ValueError:
+            selected_year = datetime.now(timezone.utc).year
+    elif not year:
+        selected_year = datetime.now(timezone.utc).year
+
     confirmed = await db.confirmed_segments.find({"user_id": user["user_id"], "status": "confirmed"}, {"_id": 0}).to_list(2000)
     trips = await db.trips.find({"user_id": user["user_id"]}, {"_id": 0}).to_list(500)
     stays = await db.city_stays.find({"user_id": user["user_id"]}, {"_id": 0}).to_list(1000)
@@ -1072,10 +1121,16 @@ async def wrapped(year: Optional[int] = None, user: dict = Depends(_auth)):
 
 
 @api.get("/map-data")
-async def map_data(year: Optional[int] = None, user: dict = Depends(_auth)):
+async def map_data(year: Optional[str] = None, user: dict = Depends(_auth)):
+    parsed_year = None
+    if year and year != "all":
+        try:
+            parsed_year = int(year)
+        except ValueError:
+            pass
     confirmed = await db.confirmed_segments.find({"user_id": user["user_id"], "status": "confirmed"}, {"_id": 0}).to_list(2000)
     profile = await db.user_profiles.find_one({"user_id": user["user_id"]}, {"_id": 0}) or {}
-    return compute_map_data(confirmed, profile.get("home_airport_iata"), year)
+    return compute_map_data(confirmed, profile.get("home_airport_iata"), parsed_year)
 
 
 @api.get("/cities")
