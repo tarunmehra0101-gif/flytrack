@@ -10,11 +10,12 @@ import Shell from "@/components/shell/Shell";
 import BoardingPassCard from "@/components/BoardingPassCard";
 import AirlineLogo from "@/components/AirlineLogo";
 import Autocomplete from "@/components/Autocomplete";
+import { AIRPORTS } from "@/data/airports";
 import { decodeBarcodeFromFile, fileToBase64, startLiveScanner, isCameraAvailable } from "@/lib/barcode";
 import { ocrImageFile, extractPdfText, loadPdfJsFromCdn } from "@/lib/ticketText";
 import { parseTicketText } from "@/lib/ticketParser";
 import { Confetti } from "@/components/ui/Confetti";
-import { AnimatedBarcodeIcon, AnimatedUploadIcon, AnimatedPlaneIcon, AnimatedSuccessIcon } from "@/components/ui/AnimatedIcons";
+import { AnimatedBarcodeIcon, AnimatedUploadIcon, AnimatedPlaneIcon, AnimatedSuccessIcon, AnimatedManualEntryIcon, FlightLoadingAnimation } from "@/components/ui/AnimatedIcons";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -118,8 +119,58 @@ export default function Import() {
   const [mSeat, setMSeat] = useState("");
   const [mPnr, setMPnr] = useState("");
   const [mPassenger, setMPassenger] = useState("");
-  const [mFlightOptions, setMFlightOptions] = useState([]);
+  const [mAircraftType, setMAircraftType] = useState("");
   const [mSelectedFlight, setMSelectedFlight] = useState(null);
+
+  const mSegment = {
+    airline_iata: mAirline?.iata || "",
+    airline_name: mAirline?.name || "",
+    flight_number: mFlightNumber || "",
+    flight_date: mDate || "",
+    departure_airport_iata: mFrom?.iata || "",
+    departure_city_name: mFrom?.city || "",
+    arrival_airport_iata: mTo?.iata || "",
+    arrival_city_name: mTo?.city || "",
+    departure_time_local: mDepTime || "",
+    arrival_time_local: mArrTime || "",
+    seat_number: mSeat || "",
+    booking_reference: mPnr || "",
+    pnr: mPnr || "",
+    passenger_name: mPassenger || "",
+    aircraft_type: mAircraftType || "",
+  };
+
+  const handleManualCardChange = (updated) => {
+    if (updated.flight_date !== undefined) setMDate(updated.flight_date);
+    if (updated.departure_time_local !== undefined) setMDepTime(updated.departure_time_local);
+    if (updated.arrival_time_local !== undefined) setMArrTime(updated.arrival_time_local);
+    if (updated.seat_number !== undefined) setMSeat(updated.seat_number);
+    if (updated.booking_reference !== undefined) {
+      setMPnr(updated.booking_reference);
+    } else if (updated.pnr !== undefined) {
+      setMPnr(updated.pnr);
+    }
+    if (updated.passenger_name !== undefined) setMPassenger(updated.passenger_name);
+    if (updated.aircraft_type !== undefined) setMAircraftType(updated.aircraft_type);
+    
+    if (updated.departure_airport_iata !== undefined) {
+      const code = String(updated.departure_airport_iata).toUpperCase().slice(0, 3);
+      const port = AIRPORTS[code];
+      setMFrom({ iata: code, city: port ? port.city : code });
+    }
+    if (updated.arrival_airport_iata !== undefined) {
+      const code = String(updated.arrival_airport_iata).toUpperCase().slice(0, 3);
+      const port = AIRPORTS[code];
+      setMTo({ iata: code, city: port ? port.city : code });
+    }
+    if (updated.airline_iata !== undefined) {
+      const code = String(updated.airline_iata).toUpperCase().slice(0, 2);
+      setMAirline({ iata: code, name: code });
+    }
+    if (updated.flight_number !== undefined) {
+      setMFlightNumber(updated.flight_number);
+    }
+  };
 
   const loadHistory = async () => {
     try {
@@ -175,21 +226,7 @@ export default function Import() {
     return () => stopLiveScan();
   }, [liveScanning, stopLiveScan]);
 
-  useEffect(() => {
-    if (!manualOpen || !mAirline?.iata) {
-      setMFlightOptions([]);
-      return;
-    }
-    let alive = true;
-    api.get("/flights/search", {
-      params: { airline_iata: mAirline.iata, q: mFlightNumber, limit: 8 },
-    }).then(({ data }) => {
-      if (alive) setMFlightOptions(data || []);
-    }).catch(() => {
-      if (alive) setMFlightOptions([]);
-    });
-    return () => { alive = false; };
-  }, [manualOpen, mAirline?.iata, mFlightNumber]);
+
 
   const handleImages = async (files) => {
     const list = Array.from(files || []);
@@ -378,16 +415,18 @@ export default function Import() {
         params: { airline_iata: mAirline.iata, flight_number: mFlightNumber.trim(), date: mDate },
       });
       setMFetched(data);
-      if (data.found) {
+      if (data.found && data.flight) {
         toast.success("Flight details fetched.");
-        // Preset airports if enrichment found them
-        if (data.flight.departure_airport_iata && !mFrom) {
-          setMFrom({ iata: data.flight.departure_airport_iata, city: data.flight.departure_city_name });
+        if (data.flight.departure_airport_iata) {
+          setMFrom({ iata: data.flight.departure_airport_iata, city: data.flight.departure_city_name || data.flight.departure_airport_iata });
         }
-        if (data.flight.arrival_airport_iata && !mTo) {
-          setMTo({ iata: data.flight.arrival_airport_iata, city: data.flight.arrival_city_name });
+        if (data.flight.arrival_airport_iata) {
+          setMTo({ iata: data.flight.arrival_airport_iata, city: data.flight.arrival_city_name || data.flight.arrival_airport_iata });
         }
-        if (data.flight.aircraft_type || data.source === "local_catalog") setMSelectedFlight(data.flight);
+        setMSelectedFlight(data.flight);
+        if (data.flight.aircraft_type) {
+          setMAircraftType(data.flight.aircraft_type);
+        }
 
         const depTime = data.flight.local_departure_time || (data.flight.departure_time_local ? data.flight.departure_time_local.slice(11, 16) : "");
         const arrTime = data.flight.local_arrival_time || (data.flight.arrival_time_local ? data.flight.arrival_time_local.slice(11, 16) : "");
@@ -431,7 +470,7 @@ export default function Import() {
         booking_reference: mPnr || null,
         passenger_name: mPassenger || null,
         flight_duration_minutes: duration,
-        aircraft_type: mSelectedFlight?.aircraft_type || mFetched?.flight?.aircraft_type,
+        aircraft_type: mAircraftType || mSelectedFlight?.aircraft_type || mFetched?.flight?.aircraft_type || null,
         local_departure_time: depTime,
       });
       setPreview(data);
@@ -448,7 +487,8 @@ export default function Import() {
   const resetManualForm = () => {
     setMAirline(null); setMFlightNumber(""); setMDate(""); setMFetched(null);
     setMFrom(null); setMTo(null); setMSeat(""); setMPnr(""); setMPassenger("");
-    setMSelectedFlight(null); setMFlightOptions([]); setMDepTime(""); setMArrTime("");
+    setMSelectedFlight(null); setMDepTime(""); setMArrTime("");
+    setMAircraftType("");
   };
 
   const reviewIt = () => {
@@ -464,6 +504,9 @@ export default function Import() {
   const selectCatalogFlight = (flight) => {
     setMSelectedFlight(flight);
     setMFlightNumber(flight.flight_number || flight.number || "");
+    if (flight.airline_iata) {
+      setMAirline({ iata: flight.airline_iata, name: flight.airline_name || flight.airline_iata });
+    }
     setMFrom({ iata: flight.departure_airport_iata, city: flight.departure_city_name });
     setMTo({ iata: flight.arrival_airport_iata, city: flight.arrival_city_name });
     setMFetched({ found: true, source: "local_catalog", flight });
@@ -475,6 +518,9 @@ export default function Import() {
       const arrH = String(Math.floor(totalMinutes / 60)).padStart(2, "0");
       const arrM = String(totalMinutes % 60).padStart(2, "0");
       setMArrTime(`${arrH}:${arrM}`);
+    }
+    if (flight.aircraft_type) {
+      setMAircraftType(flight.aircraft_type);
     }
     toast.success(`${flight.flight_number || flight.number} route pre-filled.`);
   };
@@ -497,7 +543,7 @@ export default function Import() {
 
         {/* Live Scanner Overlay */}
         {liveScanning && (
-          <div className="fixed inset-0 z-50 bg-black flex flex-col" data-testid="live-scanner">
+          <div className="absolute inset-0 z-50 bg-black rounded-[inherit] flex flex-col" data-testid="live-scanner">
             <div className="relative flex-1">
               <video ref={videoRef} className="w-full h-full object-cover" autoPlay playsInline muted />
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -521,165 +567,284 @@ export default function Import() {
           </div>
         )}
 
-        {/* Preview card */}
+        {/* Preview overlay modal */}
         {previewSegments.length > 0 && (
-          <div className="flex flex-col gap-3 animate-fade-up" data-testid="preview-card">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 size={14} className="text-primary" />
-                <p className="text-sm font-medium">
-                  Got it — {previewSegments.length === 1 ? "here's your flight" : `${previewSegments.length} flights found`}
-                </p>
-              </div>
-              {(preview.auto_confirmed > 0 || preview.enrichment_applied) && (
-                <span className="tl-iata-pill text-[10px] !bg-primary/15 !text-primary !border-primary/30 inline-flex items-center gap-1">
-                  <Sparkles size={10} /> {preview.auto_confirmed > 0 ? `${preview.auto_confirmed} saved` : "live"}
-                </span>
-              )}
-            </div>
-            <div className="flex flex-col gap-3">
-              {previewSegments.map((seg) => (
-                <div key={seg.id} className="flex flex-col gap-2">
-                  <BoardingPassCard
-                    flight={seg}
-                    footerRight={seg.status === "confirmed" ? (
-                      <span className="px-2 py-0.5 rounded-full bg-primary/15 text-primary text-[10px] uppercase tracking-wider">saved</span>
-                    ) : null}
-                  />
-                  {(seg.parse_message || (seg.missing_fields || []).length > 0) && (
-                    <div className="tl-card p-3 text-xs border-amber-500/30 bg-amber-500/5">
-                      <p className="font-medium text-amber-300">{seg.parse_message || "Review recommended"}</p>
-                      {(seg.missing_fields || []).length > 0 && (
-                        <p className="text-muted-foreground mt-1">Needs: {seg.missing_fields.map(friendlyField).join(", ")}</p>
-                      )}
-                    </div>
-                  )}
+          <div className="fixed inset-0 bg-background/85 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
+            <div className="bg-card border border-border/80 rounded-[32px] p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto no-scrollbar shadow-2xl flex flex-col gap-4 animate-fade-up relative">
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={14} className="text-primary" />
+                  <p className="text-sm font-medium text-foreground">
+                    Got it — {previewSegments.length === 1 ? "here's your flight" : `${previewSegments.length} flights found`}
+                  </p>
                 </div>
-              ))}
+                <div className="flex items-center gap-2">
+                  {(preview.auto_confirmed > 0 || preview.enrichment_applied) && (
+                    <span className="tl-iata-pill text-[10px] !bg-primary/15 !text-primary !border-primary/30 inline-flex items-center gap-1">
+                      <Sparkles size={10} /> {preview.auto_confirmed > 0 ? `${preview.auto_confirmed} saved` : "live"}
+                    </span>
+                  )}
+                  <button
+                    onClick={() => {
+                      setPreview(null);
+                      if (isOnboarding) {
+                        navigate("/timeline");
+                      }
+                    }}
+                    className="p-1.5 rounded-full hover:bg-secondary text-muted-foreground transition-colors"
+                    title="Dismiss"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+              <div className="flex flex-col gap-3">
+                {previewSegments.map((seg) => (
+                  <div key={seg.id} className="flex flex-col gap-2">
+                    <BoardingPassCard
+                      flight={seg}
+                      footerRight={seg.status === "confirmed" ? (
+                        <span className="px-2 py-0.5 rounded-full bg-primary/15 text-primary text-[10px] uppercase tracking-wider">saved</span>
+                      ) : null}
+                    />
+                    {(seg.parse_message || (seg.missing_fields || []).length > 0) && (
+                      <div className="tl-card p-3 text-xs border-amber-500/30 bg-amber-500/5">
+                        <p className="font-medium text-amber-300">{seg.parse_message || "Review recommended"}</p>
+                        {(seg.missing_fields || []).length > 0 && (
+                          <p className="text-muted-foreground mt-1">Needs: {seg.missing_fields.map(friendlyField).join(", ")}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2 border-t border-border pt-4 mt-2">
+                <button
+                  onClick={reviewIt}
+                  disabled={!previewSegments.some((s) => s.status !== "confirmed" && s.status !== "duplicate")}
+                  className="flex-1 tl-btn-primary flex items-center justify-center gap-1.5 text-sm py-2.5"
+                  data-testid="review-edit-btn"
+                >
+                  <CheckCircle2 size={14} /> Review and save
+                </button>
+              </div>
             </div>
-            <div className="flex gap-2">
+          </div>
+        )}
+
+        {manualOpen ? (
+          <div className="tl-card p-5 flex flex-col gap-4 animate-fade-up" data-testid="manual-entry-form">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div className="flex items-center gap-2">
+                <PenLine size={16} className="text-primary" />
+                <h2 className="text-base font-bold text-foreground">Add Flight Manually</h2>
+              </div>
               <button
-                onClick={reviewIt}
-                disabled={!previewSegments.some((s) => s.status !== "confirmed" && s.status !== "duplicate")}
-                className="flex-1 tl-btn-primary flex items-center justify-center gap-1.5 text-sm"
-                data-testid="review-edit-btn"
+                onClick={() => { setManualOpen(false); resetManualForm(); }}
+                className="p-1.5 rounded-full hover:bg-secondary text-muted-foreground transition-colors"
+                title="Cancel"
               >
-                <CheckCircle2 size={14} /> Review and save
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Airline Selection */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-muted-foreground">Airline *</label>
+                <Autocomplete
+                  kind="airline"
+                  value={mAirline}
+                  onSelect={(airline) => {
+                    setMAirline(airline);
+                    if (airline?.iata) {
+                      if (!mFlightNumber || !mFlightNumber.startsWith(airline.iata)) {
+                        setMFlightNumber(airline.iata);
+                      }
+                    }
+                  }}
+                  testId="manual-airline"
+                />
+              </div>
+
+              {/* Flight Number Selection with Lookup button */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-muted-foreground">Flight Number *</label>
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <Autocomplete
+                      kind="flight"
+                      value={mSelectedFlight || mFlightNumber}
+                      onSelect={selectCatalogFlight}
+                      onTextChange={(val) => {
+                        setMFlightNumber(val);
+                        setMSelectedFlight(null);
+                      }}
+                      extraParams={{ airline_iata: mAirline?.iata }}
+                      placeholder="e.g. 101"
+                      testId="manual-flight-number"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    disabled={mFetching || !mAirline?.iata || !mFlightNumber.trim()}
+                    onClick={fetchManualDetails}
+                    className="tl-btn-secondary px-3 flex items-center justify-center gap-1 text-xs self-start h-[38px] min-w-[110px]"
+                    data-testid="manual-lookup-btn"
+                  >
+                    {mFetching ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                    Verify Flight
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {mFetching ? (
+              <div className="flex flex-col items-center justify-center py-10 gap-2 border border-border/40 rounded-3xl bg-secondary/10">
+                <FlightLoadingAnimation size={120} />
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground px-1">Interactive Boarding Pass</p>
+                <BoardingPassCard
+                  flight={mSegment}
+                  isEditable={true}
+                  onChange={handleManualCardChange}
+                />
+              </div>
+            )}
+
+            <div className="flex gap-3 border-t border-border pt-4 mt-2">
+              <button
+                type="button"
+                onClick={() => { setManualOpen(false); resetManualForm(); }}
+                className="flex-1 tl-btn-secondary text-sm py-2.5"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={saveManual}
+                disabled={!mAirline?.iata || !mFlightNumber.trim() || !mDate || !(mFrom?.iata || mFetched?.flight?.departure_airport_iata) || !(mTo?.iata || mFetched?.flight?.arrival_airport_iata)}
+                className="flex-1 tl-btn-primary text-sm py-2.5"
+                data-testid="manual-save-btn"
+              >
+                Save Flight
               </button>
             </div>
           </div>
-        )}
-
-        {/* Main premium 3-path ingestion options */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Pathway 1: Barcode Scan */}
-          <button
-            onClick={startLiveScan}
-            disabled={isBusy}
-            className="tl-card tl-card-intense tl-card-interactive flex flex-col items-center justify-center p-6 text-center border-2 border-primary/20 hover:border-primary/60 transition-all duration-300 shadow-[0_4px_20px_-4px_rgba(37,99,235,0.15)] hover:shadow-[0_4px_30px_-2px_rgba(37,99,235,0.3)] min-h-[175px] group relative overflow-hidden text-left"
-            data-testid="live-scan-btn"
-          >
-            <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-primary/10 to-transparent rounded-bl-full pointer-events-none transition-all duration-300 group-hover:scale-110" />
-            <div className="mb-4 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3">
-              <AnimatedBarcodeIcon size={56} />
-            </div>
-            <h3 className="text-base font-bold tracking-tight text-foreground">Scan Barcode</h3>
-            <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">Live camera scanning of e-ticket or boarding pass barcodes</p>
-            <span 
-              className="text-[10px] text-primary font-medium underline underline-offset-4 mt-3 block hover:text-primary z-10 relative cursor-pointer" 
-              onClick={(e) => { e.stopPropagation(); setPasteOpen(true); }}
-              data-testid="paste-barcode-fallback"
-            >
-              Or paste barcode string
-            </span>
-          </button>
-
-          {/* Pathway 2: Upload Boarding Pass (PDF / Image) */}
-          <button
-            onClick={() => !isBusy && fileInputRef.current?.click()}
-            disabled={isBusy}
-            className="tl-card tl-card-intense tl-card-interactive flex flex-col items-center justify-center p-6 text-center border-2 border-primary/20 hover:border-primary/60 transition-all duration-300 shadow-[0_4px_20px_-4px_rgba(37,99,235,0.15)] hover:shadow-[0_4px_30px_-2px_rgba(37,99,235,0.3)] min-h-[175px] group relative overflow-hidden"
-            data-testid="upload-cta"
-          >
-            <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-primary/10 to-transparent rounded-bl-full pointer-events-none transition-all duration-300 group-hover:scale-110" />
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="application/pdf,.pdf,image/*"
-              multiple
-              className="hidden"
-              data-testid="file-input"
-              onChange={(e) => handleFileSelection(e.target.files)}
-            />
-            {isBusy && (uploadType === "image" || uploadType === "pdf") ? (
-              <div className="flex flex-col items-center gap-3">
-                <Loader2 className="w-10 h-10 text-primary animate-spin" />
-                <p className="text-sm font-semibold">{status === "reading" ? "Reading file..." : "Analyzing ticket..."}</p>
-              </div>
-            ) : (
-              <>
-                <div className="mb-4 transition-transform duration-300 group-hover:scale-110 group-hover:-translate-y-0.5">
-                  <AnimatedUploadIcon size={56} />
+        ) : (
+          <>
+            {/* Main premium 3-path ingestion options */}
+            <div className="flex flex-col gap-4">
+              {/* Pathway 1: Barcode Scan */}
+              <button
+                onClick={startLiveScan}
+                disabled={isBusy}
+                className="tl-card tl-card-intense tl-card-interactive flex flex-col items-center justify-center p-6 text-center border-2 border-primary/20 hover:border-primary/60 transition-all duration-300 shadow-[0_4px_20px_-4px_rgba(37,99,235,0.15)] hover:shadow-[0_4px_30px_-2px_rgba(37,99,235,0.3)] min-h-[175px] group relative overflow-hidden text-left"
+                data-testid="live-scan-btn"
+              >
+                <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-primary/10 to-transparent rounded-bl-full pointer-events-none transition-all duration-300 group-hover:scale-110" />
+                <div className="mb-4 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3">
+                  <AnimatedBarcodeIcon size={56} />
                 </div>
-                <h3 className="text-base font-bold tracking-tight text-foreground">Upload Boarding Pass</h3>
-                <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">Drop or browse boarding pass PDFs, ticket images, or screenshots</p>
-                <span className="text-[10px] text-muted-foreground mt-3 font-mono">PDF, PNG, JPG, JPEG</span>
-              </>
-            )}
-          </button>
+                <h3 className="text-base font-bold tracking-tight text-foreground">Scan Barcode</h3>
+                <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">Live camera scanning of e-ticket or boarding pass barcodes</p>
+                <span 
+                  className="text-[10px] text-primary font-medium underline underline-offset-4 mt-3 block hover:text-primary z-10 relative cursor-pointer" 
+                  onClick={(e) => { e.stopPropagation(); setPasteOpen(true); }}
+                  data-testid="paste-barcode-fallback"
+                >
+                  Or paste barcode string
+                </span>
+              </button>
 
-          {/* Pathway 3: Manual Flight Entry */}
-          <button
-            onClick={() => setManualOpen(true)}
-            className="tl-card tl-card-intense tl-card-interactive flex flex-col items-center justify-center p-6 text-center border-2 border-primary/20 hover:border-primary/60 transition-all duration-300 shadow-[0_4px_20px_-4px_rgba(37,99,235,0.15)] hover:shadow-[0_4px_30px_-2px_rgba(37,99,235,0.3)] min-h-[175px] group relative overflow-hidden"
-            data-testid="manual-entry-btn"
-          >
-            <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-primary/10 to-transparent rounded-bl-full pointer-events-none transition-all duration-300 group-hover:scale-110" />
-            <div className="mb-4 transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3">
-              <AnimatedPlaneIcon size={56} />
-            </div>
-            <h3 className="text-base font-bold tracking-tight text-foreground">Manual Entry</h3>
-            <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">Know your flight? Direct live lookup and step-by-step entry forms</p>
-            <span className="text-[10px] text-primary font-medium underline underline-offset-4 mt-3 block hover:text-primary z-10 relative cursor-pointer">
-              Fill in details
-            </span>
-          </button>
-        </div>
-
-        {error && (
-          <div className="tl-card p-3 flex items-start gap-3 border-destructive/40 bg-destructive/5" data-testid="error-banner">
-            <AlertTriangle size={16} className="text-destructive mt-0.5 flex-shrink-0" />
-            <div className="text-xs">
-              <p className="font-medium text-destructive">Something didn't work</p>
-              <p className="text-muted-foreground mt-0.5">{error}</p>
-            </div>
-          </div>
-        )}
-
-
-
-        {/* Upload history */}
-        {history.length > 0 && (
-          <div className="flex flex-col gap-2" data-testid="history-section">
-            <div className="flex items-center gap-2 text-muted-foreground mt-2">
-              <History size={13} />
-              <p className="text-[10px] uppercase tracking-[0.22em]">Recent additions</p>
-            </div>
-            <ul className="flex flex-col gap-2">
-              {history.slice(0, 6).map((a) => (
-                <li key={a.id} className="tl-card p-3 flex items-center justify-between text-xs" data-testid={`artifact-row-${a.id}`}>
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className={`w-2 h-2 rounded-full ${a.parser_status === "parsed" ? "bg-primary" : "bg-amber-500"}`} />
-                    <div className="min-w-0">
-                      <p className="font-medium truncate">{a.display_title || a.original_filename || "Pasted code"}</p>
-                      <p className="text-[10px] text-muted-foreground tl-mono">{fmtDate(a.created_at)}</p>
-                    </div>
+              {/* Pathway 2: Upload Boarding Pass (PDF / Image) */}
+              <button
+                onClick={() => !isBusy && fileInputRef.current?.click()}
+                disabled={isBusy}
+                className="tl-card tl-card-intense tl-card-interactive flex flex-col items-center justify-center p-6 text-center border-2 border-primary/20 hover:border-primary/60 transition-all duration-300 shadow-[0_4px_20px_-4px_rgba(37,99,235,0.15)] hover:shadow-[0_4px_30px_-2px_rgba(37,99,235,0.3)] min-h-[175px] group relative overflow-hidden"
+                data-testid="upload-cta"
+              >
+                <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-primary/10 to-transparent rounded-bl-full pointer-events-none transition-all duration-300 group-hover:scale-110" />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="application/pdf,.pdf,image/*"
+                  multiple
+                  className="hidden"
+                  data-testid="file-input"
+                  onChange={(e) => handleFileSelection(e.target.files)}
+                />
+                {isBusy && (uploadType === "image" || uploadType === "pdf") ? (
+                  <div className="flex flex-col items-center gap-3">
+                    <Loader2 className="w-10 h-10 text-primary animate-spin" />
+                    <p className="text-sm font-semibold">{status === "reading" ? "Reading file..." : "Analyzing ticket..."}</p>
                   </div>
-                  <SourceLabel type={a.source_type} />
-                </li>
-              ))}
-            </ul>
-          </div>
+                ) : (
+                  <>
+                    <div className="mb-4 transition-transform duration-300 group-hover:scale-110 group-hover:-translate-y-0.5">
+                      <AnimatedUploadIcon size={56} />
+                    </div>
+                    <h3 className="text-base font-bold tracking-tight text-foreground">Upload Boarding Pass</h3>
+                    <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">Drop or browse boarding pass PDFs, ticket images, or screenshots</p>
+                    <span className="text-[10px] text-muted-foreground mt-3 font-mono">PDF, PNG, JPG, JPEG</span>
+                  </>
+                )}
+              </button>
+
+              {/* Pathway 3: Manual Flight Entry */}
+              <button
+                onClick={() => setManualOpen(true)}
+                className="tl-card tl-card-intense tl-card-interactive flex flex-col items-center justify-center p-6 text-center border-2 border-primary/20 hover:border-primary/60 transition-all duration-300 shadow-[0_4px_20px_-4px_rgba(37,99,235,0.15)] hover:shadow-[0_4px_30px_-2px_rgba(37,99,235,0.3)] min-h-[175px] group relative overflow-hidden"
+                data-testid="manual-entry-btn"
+              >
+                <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-primary/10 to-transparent rounded-bl-full pointer-events-none transition-all duration-300 group-hover:scale-110" />
+                <div className="mb-4 transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3">
+                  <AnimatedManualEntryIcon size={56} />
+                </div>
+                <h3 className="text-base font-bold tracking-tight text-foreground">Manual Entry</h3>
+                <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">Know your flight? Direct live lookup and step-by-step entry forms</p>
+                <span className="text-[10px] text-primary font-medium underline underline-offset-4 mt-3 block hover:text-primary z-10 relative cursor-pointer">
+                  Fill in details
+                </span>
+              </button>
+            </div>
+
+            {error && (
+              <div className="tl-card p-3 flex items-start gap-3 border-destructive/40 bg-destructive/5" data-testid="error-banner">
+                <AlertTriangle size={16} className="text-destructive mt-0.5 flex-shrink-0" />
+                <div className="text-xs">
+                  <p className="font-medium text-destructive">Something didn't work</p>
+                  <p className="text-muted-foreground mt-0.5">{error}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Upload history */}
+            {history.length > 0 && (
+              <div className="flex flex-col gap-2" data-testid="history-section">
+                <div className="flex items-center gap-2 text-muted-foreground mt-2">
+                  <History size={13} />
+                  <p className="text-[10px] uppercase tracking-[0.22em]">Recent additions</p>
+                </div>
+                <ul className="flex flex-col gap-2">
+                  {history.slice(0, 6).map((a) => (
+                    <li key={a.id} className="tl-card p-3 flex items-center justify-between text-xs" data-testid={`artifact-row-${a.id}`}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className={`w-2 h-2 rounded-full ${a.parser_status === "parsed" ? "bg-primary" : "bg-amber-500"}`} />
+                        <div className="min-w-0">
+                          <p className="font-medium truncate">{a.display_title || a.original_filename || "Pasted code"}</p>
+                          <p className="text-[10px] text-muted-foreground tl-mono">{fmtDate(a.created_at)}</p>
+                        </div>
+                      </div>
+                      <SourceLabel type={a.source_type} />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -706,148 +871,7 @@ export default function Import() {
         </DialogContent>
       </Dialog>
 
-      {/* Add-by-flight-number dialog */}
-      <Dialog open={manualOpen} onOpenChange={(v) => { if (!v) resetManualForm(); setManualOpen(v); }}>
-        <DialogContent className="max-w-[450px] w-[95vw] max-h-[90vh] flex flex-col p-6">
-          <DialogHeader className="pb-2">
-            <DialogTitle>Add a flight</DialogTitle>
-            <DialogDescription>Select an airline, enter your flight number, and we'll fill in the rest.</DialogDescription>
-          </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto pr-1.5 py-1 flex flex-col gap-4 max-h-[58vh] sm:max-h-[62vh] no-scrollbar">
-            {/* Step 1: Airline */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Airline</label>
-              <Autocomplete
-                kind="airline"
-                value={mAirline}
-                onSelect={(it) => { setMAirline(it); setMSelectedFlight(null); setMFetched(null); }}
-                placeholder="Air India, IndiGo, Emirates…"
-                testId="manual-airline-ac"
-                renderItem={(item) => (
-                  <>
-                    <AirlineLogo iata={item.iata} size={24} />
-                    <span className="tl-iata-pill !text-xs">{item.iata}</span>
-                    <p className="text-sm font-medium truncate">{item.name}</p>
-                  </>
-                )}
-              />
-            </div>
-
-            {/* Step 2: Flight number */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Flight number</label>
-              <Input
-                data-testid="manual-flight-number"
-                placeholder={mAirline ? `e.g. ${mAirline.iata}505` : "e.g. AI505"}
-                value={mFlightNumber}
-                onChange={(e) => { setMFlightNumber(e.target.value); setMSelectedFlight(null); setMFetched(null); }}
-                autoComplete="off"
-              />
-            </div>
-
-            {/* Route suggestions from catalog */}
-            {mAirline && mFlightOptions.length > 0 && !mFetched && (
-              <div className="flex flex-col gap-1.5 max-h-36 overflow-auto no-scrollbar">
-                {mFlightOptions.map((flight) => (
-                  <button
-                    key={`${flight.airline_iata}-${flight.number}-${flight.departure_airport_iata}`}
-                    onClick={() => selectCatalogFlight(flight)}
-                    className={`tl-card tl-card-interactive text-left p-2.5 flex items-center gap-3 text-xs ${mSelectedFlight?.flight_number === flight.flight_number ? "border-primary/50 bg-primary/5" : ""}`}
-                  >
-                    <AirlineLogo iata={flight.airline_iata || mAirline.iata} size={20} />
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold">{flight.flight_number || flight.number} · {flight.departure_airport_iata} → {flight.arrival_airport_iata}</p>
-                      <p className="text-[10px] text-muted-foreground">{flight.departure_city_name} → {flight.arrival_city_name}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Fetch button */}
-            {mAirline && mFlightNumber && !mFetched && (
-              <button
-                onClick={fetchManualDetails}
-                disabled={!mAirline || !mFlightNumber || mFetching}
-                className="w-full py-2.5 rounded-xl border border-primary/40 text-primary font-medium text-sm hover:bg-primary/10 disabled:opacity-50 flex items-center justify-center gap-2"
-                data-testid="fetch-flight-btn"
-              >
-                {mFetching ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                {mFetching ? "Fetching…" : "Fetch route details"}
-              </button>
-            )}
-
-            {/* Fetched result */}
-            {mFetched?.found && (
-              <div className="tl-card p-3 text-xs border-primary/30 bg-primary/5" data-testid="fetch-result">
-                <p className="text-primary font-medium flex items-center gap-1.5 mb-1">
-                  <CheckCircle2 size={12} /> Route confirmed
-                </p>
-                <p className="text-foreground font-semibold">
-                  {mFetched.flight.departure_city_name} ({mFetched.flight.departure_airport_iata}) → {mFetched.flight.arrival_city_name} ({mFetched.flight.arrival_airport_iata})
-                </p>
-              </div>
-            )}
-
-            {/* Step 3: Route */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">From</label>
-                <Autocomplete kind="airport" value={mFrom} onSelect={setMFrom} testId="manual-from-ac" placeholder="City or IATA" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">To</label>
-                <Autocomplete kind="airport" value={mTo} onSelect={setMTo} testId="manual-to-ac" placeholder="City or IATA" />
-              </div>
-            </div>
-
-            {/* Step 4: Date & Time */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Date</label>
-                <Input
-                  type="date"
-                  data-testid="manual-date"
-                  value={mDate}
-                  onChange={(e) => setMDate(e.target.value)}
-                  className="h-9 block w-full text-xs"
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-muted-foreground flex items-center gap-1 font-medium uppercase tracking-wider"><Clock size={9} /> Departure</label>
-                <Input data-testid="manual-dep-time" type="time" value={mDepTime} onChange={(e) => setMDepTime(e.target.value)} placeholder="09:00" autoComplete="off" className="h-9 text-xs" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-muted-foreground flex items-center gap-1 font-medium uppercase tracking-wider"><Clock size={9} /> Arrival</label>
-                <Input data-testid="manual-arr-time" type="time" value={mArrTime} onChange={(e) => setMArrTime(e.target.value)} placeholder="12:30" autoComplete="off" className="h-9 text-xs" />
-              </div>
-            </div>
-
-            {/* Step 5: Optional details */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">PNR / Ref</label>
-                <Input data-testid="manual-pnr" placeholder="Booking ref" value={mPnr} onChange={(e) => setMPnr(e.target.value)} autoComplete="off" className="h-9 text-xs" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Seat</label>
-                <Input data-testid="manual-seat" placeholder="Seat" value={mSeat} onChange={(e) => setMSeat(e.target.value)} autoComplete="off" className="h-9 text-xs" />
-              </div>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Passenger Name</label>
-              <Input data-testid="manual-passenger" placeholder="Passenger name (optional)" value={mPassenger} onChange={(e) => setMPassenger(e.target.value)} autoComplete="off" className="h-9 text-xs" />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <button onClick={saveManual} className="tl-btn-primary w-full" data-testid="manual-submit-btn">
-              Add to Flight Timeline
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </Shell>
   );
 }

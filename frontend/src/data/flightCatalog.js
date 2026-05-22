@@ -255,7 +255,137 @@ const rows = [
   ["SQ", "508", "SIN", "BLR", 255, "Airbus A350-900", "08:00"],
 ];
 
-export const FLIGHT_CATALOG = rows.map(([airline_iata, number, from, to, duration, aircraft_type, local_departure_time]) => ({
+const dynamicRows = [];
+
+// Helper to calculate deterministic mock values from strings (hashes)
+function getHash(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return Math.abs(hash);
+}
+
+// Helper to determine distance & flight time between two airports
+function calculateFlightDuration(fromCode, toCode) {
+  const fromAp = AIRPORTS[fromCode];
+  const toAp = AIRPORTS[toCode];
+  if (!fromAp || !toAp) return 90; // fallback minutes
+  
+  // Haversine approx
+  const rad = Math.PI / 180;
+  const lat1 = fromAp.lat * rad;
+  const lat2 = toAp.lat * rad;
+  const dLat = (toAp.lat - fromAp.lat) * rad;
+  const dLng = (toAp.lng - fromAp.lng) * rad;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  const distKm = Math.round(6371 * 2 * Math.asin(Math.sqrt(h)));
+  
+  // ~800 km/h average speed + 20 mins padding
+  const minutes = Math.round((distKm / 800) * 60 + 20);
+  return Math.max(45, minutes);
+}
+
+// Dynamic Hub-and-Spoke Route generation
+const PRIMARY_HUBS = ["DEL", "BOM", "BLR", "HYD", "MAA", "CCU"];
+const allAirports = Object.values(AIRPORTS || {});
+const indianAirports = allAirports.filter(a => a.country === "IN" && a.iata);
+
+// Helper to generate route flights
+function generateRouteFlights(from, to, isInternational = false) {
+  const routeKey = `${from}-${to}`;
+  const routeHash = getHash(routeKey);
+  const duration = calculateFlightDuration(from, to);
+  
+  if (isInternational) {
+    const carriers = [
+      { code: "AI", aircraft: "Boeing 787-8" },
+      { code: "EK", aircraft: "Boeing 777-300ER" },
+      { code: "SQ", aircraft: "Airbus A350-900" },
+      { code: "EY", aircraft: "Boeing 787-9" }
+    ];
+    
+    const c1 = carriers[routeHash % carriers.length];
+    const c2 = carriers[(routeHash + 1) % carriers.length];
+    const num1 = 100 + (routeHash % 400);
+    const num2 = 100 + ((routeHash + 17) % 400);
+    
+    dynamicRows.push([c1.code, String(num1), from, to, duration, c1.aircraft, "08:15"]);
+    dynamicRows.push([c2.code, String(num2), from, to, duration, c2.aircraft, "22:40"]);
+  } else {
+    const carriers = [
+      { code: "6E", aircraft: "Airbus A320neo" },
+      { code: "AI", aircraft: "Airbus A321neo" },
+      { code: "QP", aircraft: "Boeing 737 MAX 8" },
+      { code: "SG", aircraft: "Boeing 737" }
+    ];
+    
+    const carrier1 = carriers[routeHash % carriers.length];
+    const carrier2 = carriers[(routeHash + 1) % carriers.length];
+    const baseNum1 = 1000 + (routeHash % 8000);
+    const baseNum2 = 1000 + ((routeHash + 42) % 8000);
+    
+    // Morning Slot
+    dynamicRows.push([carrier1.code, String(baseNum1), from, to, duration, carrier1.aircraft, "07:30"]);
+    // Afternoon Slot
+    dynamicRows.push([carrier2.code, String(baseNum2), from, to, duration, carrier2.aircraft, "13:15"]);
+    // Evening Slot
+    dynamicRows.push([carrier1.code, String(baseNum1 + 1), from, to, duration, carrier1.aircraft, "17:45"]);
+    // Night Slot
+    dynamicRows.push([carrier2.code, String(baseNum2 + 1), from, to, duration, carrier2.aircraft, "21:00"]);
+  }
+}
+
+// 1. Generate Hub-to-Hub routes
+for (let i = 0; i < PRIMARY_HUBS.length; i++) {
+  for (let j = i + 1; j < PRIMARY_HUBS.length; j++) {
+    generateRouteFlights(PRIMARY_HUBS[i], PRIMARY_HUBS[j]);
+    generateRouteFlights(PRIMARY_HUBS[j], PRIMARY_HUBS[i]);
+  }
+}
+
+// 2. Generate Spoke-to-Hub routes (Hub-and-Spoke model) for all Indian airports
+for (const spoke of indianAirports) {
+  if (PRIMARY_HUBS.includes(spoke.iata)) continue;
+  
+  const spokeHash = getHash(spoke.iata);
+  const selectedHubs = [];
+  for (let k = 0; k < 3; k++) {
+    const hubIndex = (spokeHash + k) % PRIMARY_HUBS.length;
+    const hub = PRIMARY_HUBS[hubIndex];
+    if (!selectedHubs.includes(hub)) selectedHubs.push(hub);
+  }
+  
+  for (const hub of selectedHubs) {
+    generateRouteFlights(spoke.iata, hub);
+    generateRouteFlights(hub, spoke.iata);
+  }
+}
+
+// 3. Generate International gateway routes to/from top primary Indian hubs
+const INTERNATIONAL_GATEWAYS = ["DXB", "SIN", "LHR", "JFK", "SFO", "BKK", "KUL", "AUH", "DOH"];
+for (const gateway of INTERNATIONAL_GATEWAYS) {
+  const majorHubs = ["DEL", "BOM", "BLR"];
+  for (const hub of majorHubs) {
+    generateRouteFlights(gateway, hub, true);
+    generateRouteFlights(hub, gateway, true);
+  }
+}
+
+// Merge and deduplicate
+const allRows = [...rows, ...dynamicRows];
+const seen = new Set();
+const deduplicatedRows = [];
+
+for (const r of allRows) {
+  const key = `${r[0]}${r[1]}`;
+  if (!seen.has(key)) {
+    seen.add(key);
+    deduplicatedRows.push(r);
+  }
+}
+
+export const FLIGHT_CATALOG = deduplicatedRows.map(([airline_iata, number, from, to, duration, aircraft_type, local_departure_time]) => ({
   airline_iata,
   airline_name: AIRLINES[airline_iata] || airline_iata,
   number,

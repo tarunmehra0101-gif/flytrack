@@ -1,28 +1,48 @@
 export async function loadPdfJsFromCdn() {
   if (window.pdfjsLib) return window.pdfjsLib;
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error("Timeout loading PDF.js from CDN"));
-    }, 10000);
 
-    const script = document.createElement("script");
-    script.src = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js";
-    script.onload = () => {
-      clearTimeout(timer);
-      const pdfjs = window.pdfjsLib;
-      if (pdfjs) {
-        pdfjs.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
-        resolve(pdfjs);
-      } else {
-        reject(new Error("pdfjsLib not found on window after script load"));
-      }
-    };
-    script.onerror = () => {
-      clearTimeout(timer);
-      reject(new Error("Failed to load PDF.js from CDN"));
-    };
-    document.head.appendChild(script);
-  });
+  const cdns = [
+    {
+      src: "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js",
+      worker: "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js"
+    },
+    {
+      src: "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js",
+      worker: "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js"
+    },
+    {
+      src: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",
+      worker: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"
+    }
+  ];
+
+  for (const cdn of cdns) {
+    try {
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error("Timeout loading PDF.js")), 8000);
+        const script = document.createElement("script");
+        script.src = cdn.src;
+        script.onload = () => {
+          clearTimeout(timer);
+          if (window.pdfjsLib) {
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc = cdn.worker;
+            resolve(window.pdfjsLib);
+          } else {
+            reject(new Error("pdfjsLib not found on window after script load"));
+          }
+        };
+        script.onerror = () => {
+          clearTimeout(timer);
+          reject(new Error("Failed to load PDF.js script"));
+        };
+        document.head.appendChild(script);
+      });
+      return window.pdfjsLib;
+    } catch (err) {
+      console.warn(`Failed to load PDF.js from CDN: ${cdn.src}, trying next...`, err);
+    }
+  }
+  throw new Error("Failed to load PDF.js from all available CDNs. Please verify your internet connection.");
 }
 
 async function ocrPdfPage(pdf, pageNo) {
@@ -66,24 +86,26 @@ export async function extractPdfText(file, options = {}) {
 }
 
 export async function ocrImageFile(file) {
-  const { createWorker } = await import("tesseract.js");
-  
-  const ocrPromise = (async () => {
-    const worker = await createWorker("eng", 1, {
-      workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/worker.min.js",
-      corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@7.0.0",
-    });
-    try {
-      const result = await worker.recognize(file);
-      return result?.data?.text || "";
-    } finally {
-      await worker.terminate();
-    }
-  })();
+  try {
+    const { createWorker } = await import("tesseract.js");
+    
+    const ocrPromise = (async () => {
+      const worker = await createWorker("eng", 1);
+      try {
+        const result = await worker.recognize(file);
+        return result?.data?.text || "";
+      } finally {
+        await worker.terminate();
+      }
+    })();
 
-  const timeoutPromise = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error("Timeout processing OCR")), 10000)
-  );
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Timeout processing OCR")), 20000)
+    );
 
-  return Promise.race([ocrPromise, timeoutPromise]);
+    return await Promise.race([ocrPromise, timeoutPromise]);
+  } catch (err) {
+    console.error("OCR recognition or loading failed:", err);
+    throw new Error("Unable to read text from this image. Please ensure you have a stable network connection to load the text recognition library, or try manually entering flight details.");
+  }
 }

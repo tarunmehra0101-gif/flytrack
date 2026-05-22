@@ -639,3 +639,374 @@ export function AnimatedSparklesIcon({ size = 48 }) {
   );
 }
 
+/**
+ * AnimatedUserIcon: Glowing, floating silhouette for step 1 of onboarding.
+ */
+export function AnimatedUserIcon({ size = 48 }) {
+  return (
+    <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
+      <motion.div
+        className="absolute rounded-full bg-primary/10 border border-primary/20"
+        style={{ width: size, height: size }}
+        animate={{ scale: [1, 1.15, 1], opacity: [0.4, 0.7, 0.4] }}
+        transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
+      />
+      <motion.svg
+        className="text-primary relative"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ width: size * 0.6, height: size * 0.6 }}
+        animate={{ y: [0, -3, 0] }}
+        transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
+      >
+        <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+        <circle cx="12" cy="7" r="4" />
+      </motion.svg>
+    </div>
+  );
+}
+
+/**
+ * AnimatedManualEntryIcon: A card-perforated ticket with a glowing plus-badge in the corner.
+ */
+export function AnimatedManualEntryIcon({ size = 48 }) {
+  return (
+    <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
+      <motion.div
+        className="absolute rounded-2xl bg-primary/5 border border-primary/20"
+        style={{ width: size * 1.2, height: size }}
+        animate={{ scale: [1, 1.05, 1] }}
+        transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
+      />
+      <motion.svg
+        className="text-primary relative"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ width: size * 0.65, height: size * 0.65 }}
+        animate={{ rotate: [0, 1, -1, 0], y: [0, -2, 0] }}
+        transition={{ repeat: Infinity, duration: 3.5, ease: "easeInOut" }}
+      >
+        <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
+        <path d="M12 5v14" strokeDasharray="3 3" />
+      </motion.svg>
+      {/* Glowing plus badge in the corner */}
+      <motion.div
+        className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-sky-500 flex items-center justify-center text-[10px] font-bold text-white shadow-[0_0_8px_rgba(14,165,233,0.8)]"
+        animate={{ scale: [1, 1.2, 1] }}
+        transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+      >
+        +
+      </motion.div>
+    </div>
+  );
+}
+
+/**
+ * FlightLoadingAnimation: An aerodynamic jet silhouette tilting and hovering with orange/yellow combustion flames, moving grid lines, and wind swirls.
+ */
+export function FlightLoadingAnimation({ size = 110 }) {
+  return (
+    <div className="relative flex flex-col items-center justify-center overflow-hidden" style={{ width: size * 1.5, height: size }}>
+      {/* Wind swirls/speed lines in the background */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        {[0, 1, 2].map((i) => (
+          <motion.div
+            key={i}
+            className="absolute h-[1px] bg-gradient-to-r from-transparent via-sky-400/40 to-transparent"
+            style={{
+              width: "50%",
+              top: `${25 + i * 25}%`,
+              left: "-50%",
+            }}
+            animate={{
+              left: ["100%", "-50%"],
+            }}
+            transition={{
+              repeat: Infinity,
+              duration: 1.2 + i * 0.3,
+              ease: "linear",
+              delay: i * 0.4,
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Aerodynamic jet container */}
+      <motion.div
+        className="relative flex items-center justify-center"
+        style={{ width: size * 0.7, height: size * 0.7 }}
+        animate={{
+          y: [-4, 4, -4],
+          rotate: [-3, 3, -3],
+        }}
+        transition={{
+          repeat: Infinity,
+          duration: 2.5,
+          ease: "easeInOut",
+        }}
+      >
+        {/* Glow behind jet */}
+        <div className="absolute w-12 h-12 bg-sky-400/25 blur-xl rounded-full" />
+
+        {/* Jet Silhouette */}
+        <svg
+          className="text-sky-400 filter drop-shadow-[0_8px_20px_rgba(56,189,248,0.4)]"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          stroke="currentColor"
+          strokeWidth="0.5"
+          style={{ width: "100%", height: "100%", transform: "rotate(-90deg)" }} // Rotated to fly forward (facing right)
+        >
+          <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5L21 16Z" />
+        </svg>
+
+        {/* Combustion engine flames */}
+        <div className="absolute left-[15%] top-[40%] flex flex-col gap-[6px] transform -translate-x-full rotate-[90deg] origin-right">
+          <motion.div
+            className="w-3 h-1 bg-gradient-to-r from-red-500 via-orange-400 to-yellow-300 rounded-full"
+            style={{ originX: 1 }}
+            animate={{
+              scaleX: [0.6, 1.4, 0.6],
+              opacity: [0.8, 1, 0.8],
+            }}
+            transition={{
+              repeat: Infinity,
+              duration: 0.15,
+              ease: "linear",
+            }}
+          />
+          <motion.div
+            className="w-3 h-1 bg-gradient-to-r from-red-500 via-orange-400 to-yellow-300 rounded-full"
+            style={{ originX: 1 }}
+            animate={{
+              scaleX: [1.4, 0.6, 1.4],
+              opacity: [1, 0.8, 1],
+            }}
+            transition={{
+              repeat: Infinity,
+              duration: 0.12,
+              ease: "linear",
+            }}
+          />
+        </div>
+      </motion.div>
+      <span className="text-[10px] tracking-[0.3em] font-semibold text-sky-400/80 uppercase mt-2 select-none animate-pulse">
+        Retrieving flight status...
+      </span>
+    </div>
+  );
+}
+
+/**
+ * AnimatedRadarIcon: Circular radar screen with sweeping green beam and blinking flight blips
+ */
+export function AnimatedRadarIcon({ size = 48 }) {
+  return (
+    <div className="relative flex items-center justify-center overflow-hidden rounded-full bg-emerald-950/20 border border-emerald-500/20 shadow-[inset_0_2px_8px_rgba(16,185,129,0.1),0_0_15px_rgba(16,185,129,0.05)]" style={{ width: size, height: size }}>
+      {/* Concentric rings */}
+      <div className="absolute rounded-full border border-emerald-500/10" style={{ width: "80%", height: "80%" }} />
+      <div className="absolute rounded-full border border-emerald-500/15" style={{ width: "50%", height: "50%" }} />
+      
+      {/* Crosshairs */}
+      <div className="absolute h-full w-[1px] bg-emerald-500/10" />
+      <div className="absolute w-full h-[1px] bg-emerald-500/10" />
+
+      {/* Sweeper beam */}
+      <motion.div
+        className="absolute w-[50%] h-[50%] origin-bottom-right"
+        style={{
+          bottom: "50%",
+          right: "50%",
+          background: "conic-gradient(from 90deg at 100% 100%, rgba(16,185,129,0.3) 0deg, rgba(16,185,129,0) 90deg)",
+        }}
+        animate={{ rotate: 360 }}
+        transition={{ repeat: Infinity, duration: 3, ease: "linear" }}
+      />
+
+      {/* Target Blip 1 */}
+      <motion.div
+        className="absolute w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,1)]"
+        style={{ top: "30%", left: "40%" }}
+        animate={{
+          opacity: [0.1, 1, 0.4, 0.1, 0.1, 0.1]
+        }}
+        transition={{
+          repeat: Infinity,
+          duration: 3,
+          delay: 0.8,
+          ease: "easeInOut"
+        }}
+      />
+
+      {/* Target Blip 2 (Plane silhouette) */}
+      <motion.div
+        className="absolute flex items-center justify-center text-emerald-400"
+        style={{ bottom: "25%", right: "30%" }}
+        animate={{
+          opacity: [0.1, 0.1, 0.1, 1, 0.4, 0.1]
+        }}
+        transition={{
+          repeat: Infinity,
+          duration: 3,
+          delay: 1.8,
+          ease: "easeInOut"
+        }}
+      >
+        <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5L21 16Z" />
+        </svg>
+      </motion.div>
+    </div>
+  );
+}
+
+/**
+ * AnimatedCompassIcon: Aviation navigation compass rose with swaying needle
+ */
+export function AnimatedCompassIcon({ size = 48 }) {
+  return (
+    <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
+      {/* Outer Dial */}
+      <div className="absolute rounded-full border border-sky-500/20 bg-sky-500/5 shadow-md flex items-center justify-center" style={{ width: size * 0.9, height: size * 0.9 }}>
+        {/* N, S, E, W Labels */}
+        <span className="absolute top-0.5 text-[8px] font-bold text-sky-400/80">N</span>
+        <span className="absolute bottom-0.5 text-[8px] font-bold text-sky-400/40">S</span>
+        <span className="absolute right-0.5 text-[8px] font-bold text-sky-400/40">E</span>
+        <span className="absolute left-0.5 text-[8px] font-bold text-sky-400/40">W</span>
+      </div>
+
+      {/* Rotating compass rose and needle */}
+      <motion.svg
+        className="relative text-sky-400 filter drop-shadow-[0_4px_8px_rgba(56,189,248,0.2)]"
+        viewBox="0 0 100 100"
+        style={{ width: size * 0.7, height: size * 0.7 }}
+        animate={{
+          rotate: [0, 8, -4, 12, 0]
+        }}
+        transition={{
+          repeat: Infinity,
+          duration: 6,
+          ease: "easeInOut"
+        }}
+      >
+        {/* Inner star design */}
+        <polygon points="50,10 54,46 50,50 46,46" fill="#38bdf8" />
+        <polygon points="50,90 54,54 50,50 46,54" fill="#0284c7" />
+        <polygon points="90,50 54,46 50,50 54,54" fill="#0284c7" />
+        <polygon points="10,50 46,46 50,50 46,54" fill="#38bdf8" />
+        
+        {/* Center hub */}
+        <circle cx="50" cy="50" r="4" fill="white" stroke="#0284c7" strokeWidth="1" />
+      </motion.svg>
+    </div>
+  );
+}
+
+/**
+ * AnimatedLuggageScannerIcon: Conveyor belt scanner with a bag transitioning through blue X-ray laser
+ */
+export function AnimatedLuggageScannerIcon({ size = 48 }) {
+  return (
+    <div className="relative flex flex-col items-center justify-center overflow-hidden rounded-2xl bg-indigo-500/5 border border-indigo-500/15" style={{ width: size * 1.3, height: size }}>
+      {/* Scanner Arch */}
+      <div className="absolute inset-x-4 top-2 bottom-3 border-2 border-b-0 border-indigo-400/30 rounded-t-xl" />
+      
+      {/* Laser line in scanner center */}
+      <motion.div
+        className="absolute w-[2px] top-2 bottom-3 bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)] z-10"
+        style={{ left: "50%" }}
+        animate={{ opacity: [0.4, 1, 0.4] }}
+        transition={{ repeat: Infinity, duration: 1.5 }}
+      />
+
+      {/* Luggage bag sliding across conveyor belt */}
+      <motion.div
+        className="absolute bottom-3.5 flex items-center justify-center"
+        style={{ left: "0", right: "0" }}
+        animate={{
+          x: [-size * 0.7, size * 0.7]
+        }}
+        transition={{
+          repeat: Infinity,
+          duration: 3.5,
+          ease: "linear"
+        }}
+      >
+        {/* The bag body changes look when passing center (X-ray overlay effect) */}
+        <motion.svg
+          className="w-7 h-6 mx-auto"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          animate={{
+            color: ["rgba(161,161,170,0.8)", "rgba(34,211,238,1)", "rgba(161,161,170,0.8)"]
+          }}
+          transition={{
+            repeat: Infinity,
+            duration: 3.5,
+            ease: "linear"
+          }}
+        >
+          {/* Suitcase Handle */}
+          <path d="M9 6V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3" />
+          {/* Suitcase Body */}
+          <rect x="4" y="6" width="16" height="14" rx="2" fill="currentColor" fillOpacity="0.15" />
+          {/* Small wheels */}
+          <circle cx="7" cy="21" r="1" fill="currentColor" />
+          <circle cx="17" cy="21" r="1" fill="currentColor" />
+        </motion.svg>
+      </motion.div>
+
+      {/* Conveyor belt roller line */}
+      <div className="absolute bottom-2 left-1.5 right-1.5 h-[3px] bg-slate-700/60 rounded-full" />
+    </div>
+  );
+}
+
+/**
+ * AnimatedTurbulenceIcon: Curved airfoil wing with wind vectors sweeping over it representing lift
+ */
+export function AnimatedTurbulenceIcon({ size = 48 }) {
+  return (
+    <div className="relative flex items-center justify-center overflow-hidden rounded-2xl bg-violet-500/5 border border-violet-500/15" style={{ width: size * 1.3, height: size }}>
+      {/* Airfoil Wing in Center */}
+      <svg className="absolute w-[40%] h-[30%] text-violet-400/80 z-10" viewBox="0 0 40 20" style={{ left: "30%" }}>
+        {/* Tear shape representing aircraft wing cross section */}
+        <path d="M 5 10 C 15 2, 35 7, 38 10 C 35 13, 15 18, 5 10 Z" fill="currentColor" fillOpacity="0.1" stroke="currentColor" strokeWidth="1.5" />
+      </svg>
+
+      {/* Streamlines moving past */}
+      <svg className="w-full h-full text-sky-400/40" viewBox="0 0 100 60">
+        {[15, 30, 45].map((y, idx) => (
+          <motion.path
+            key={idx}
+            d={`M -20 ${y} Q 30 ${y - 12} 50 ${y + 2} T 120 ${y}`}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1"
+            strokeDasharray="4 6"
+            animate={{
+              strokeDashOffset: [-20, 20]
+            }}
+            transition={{
+              repeat: Infinity,
+              duration: 2 - idx * 0.3,
+              ease: "linear"
+            }}
+          />
+        ))}
+      </svg>
+    </div>
+  );
+}
+
+

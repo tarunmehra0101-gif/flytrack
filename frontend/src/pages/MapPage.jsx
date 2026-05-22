@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Shell from "@/components/shell/Shell";
 import { Globe3D } from "@/components/ui/3d-globe";
 import MapLibreTravelMap from "@/components/MapLibreTravelMap";
+import ComponentErrorBoundary from "@/components/ComponentErrorBoundary";
 import { api } from "@/lib/api";
 import { Globe2, Building2, Home as HomeIcon, Plane, Play, Map } from "lucide-react";
 
@@ -16,6 +17,18 @@ function MarkerColor(count, maxCount, isHome) {
   if (ratio > 0.15) return "#f59e0b";
   return "#f472b6";
 }
+
+const WebGLFallback = () => (
+  <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center text-muted-foreground z-10 bg-black/60 backdrop-blur-sm">
+    <div className="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mb-4">
+      <Globe2 size={32} />
+    </div>
+    <h3 className="text-lg font-bold text-white mb-2">Interactive Preview Unavailable</h3>
+    <p className="text-xs max-w-xs text-muted-foreground leading-relaxed">
+      It looks like WebGL or hardware acceleration is disabled in your browser. Enable it in your browser settings to see your interactive 3D travel map.
+    </p>
+  </div>
+);
 
 export default function MapPage() {
   const navigate = useNavigate();
@@ -57,7 +70,10 @@ export default function MapPage() {
   }, [replay, mapData?.routes]);
 
   const { markers, arcs, airportCount, routeCount } = useMemo(() => {
-    const airports = mapData?.airport_markers || [];
+    const isValidLat = (num) => typeof num === "number" && !isNaN(num) && num >= -90 && num <= 90;
+    const isValidLng = (num) => typeof num === "number" && !isNaN(num) && num >= -180 && num <= 180;
+
+    const airports = (mapData?.airport_markers || []).filter((a) => a && isValidLat(a.lat) && isValidLng(a.lng));
     const max = Math.max(1, ...airports.map((a) => a.count || 0));
     const m = airports.map((a) => {
       return {
@@ -68,13 +84,15 @@ export default function MapPage() {
     });
 
     const routeRows = replay ? (mapData?.routes || []).slice(0, replayIndex) : (mapData?.routes || []);
-    const a = routeRows.map((x, i) => ({
-      key: x.route,
-      from: x.from,
-      to: x.to,
-      count: x.count,
-      color: ARC_PALETTE[i % ARC_PALETTE.length],
-    }));
+    const a = routeRows
+      .filter((x) => x && x.from && x.to && isValidLat(x.from.lat) && isValidLng(x.from.lng) && isValidLat(x.to.lat) && isValidLng(x.to.lng))
+      .map((x, i) => ({
+        key: x.route,
+        from: x.from,
+        to: x.to,
+        count: x.count,
+        color: ARC_PALETTE[i % ARC_PALETTE.length],
+      }));
     return { markers: m, arcs: a, airportCount: m.length, routeCount: a.length };
   }, [mapData, replay, replayIndex]);
 
@@ -90,25 +108,27 @@ export default function MapPage() {
           background: "radial-gradient(ellipse at center, rgba(10,15,30,0.8) 0%, #000 70%)",
         }} />
 
-        {mode === "globe" ? (
-          <Globe3D
-            markers={markers}
-            arcs={arcs}
-            onMarkerHover={setHovered}
-            onMarkerClick={setSelected}
-            config={{
-              autoRotateSpeed: 0.25,
-              enableZoom: true,
-              atmosphereColor: "#4da6ff",
-              atmosphereIntensity: 0.8,
-              bumpScale: 4,
-              minDistance: 2.5,
-              maxDistance: 10,
-            }}
-          />
-        ) : (
-          <MapLibreTravelMap mapData={mapData} selectedYear={year} />
-        )}
+        <ComponentErrorBoundary fallback={<WebGLFallback />}>
+          {mode === "globe" ? (
+            <Globe3D
+              markers={markers}
+              arcs={arcs}
+              onMarkerHover={setHovered}
+              onMarkerClick={setSelected}
+              config={{
+                autoRotateSpeed: 0.25,
+                enableZoom: true,
+                atmosphereColor: "#4da6ff",
+                atmosphereIntensity: 0.8,
+                bumpScale: 4,
+                minDistance: 2.5,
+                maxDistance: 10,
+              }}
+            />
+          ) : (
+            <MapLibreTravelMap mapData={mapData} selectedYear={year} />
+          )}
+        </ComponentErrorBoundary>
 
         {/* Top controls */}
         <div className="absolute top-3 left-3 right-3 z-30 flex items-center justify-between gap-2">

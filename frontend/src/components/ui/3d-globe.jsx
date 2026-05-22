@@ -126,8 +126,23 @@ export function Globe3D({ markers = [], arcs = [], className, onMarkerHover, onM
     const globe = globeRef.current;
     if (!globe || !ready) return;
 
+    const isValidLat = (num) => typeof num === "number" && !isNaN(num) && num >= -90 && num <= 90;
+    const isValidLng = (num) => typeof num === "number" && !isNaN(num) && num >= -180 && num <= 180;
+
+    const validMarkers = (markers || []).filter((d) => d && isValidLat(d.lat) && isValidLng(d.lng));
+    const validArcs = (arcs || [])
+      .filter((a) => a && a.from && a.to && isValidLat(a.from.lat) && isValidLng(a.from.lng) && isValidLat(a.to.lat) && isValidLng(a.to.lng))
+      .map((a) => ({
+        startLat: a.from.lat,
+        startLng: a.from.lng,
+        endLat: a.to.lat,
+        endLng: a.to.lng,
+        color: a.color || "#10b981",
+        count: a.count || 1,
+      }));
+
     globe
-      .pointsData(markers)
+      .pointsData(validMarkers)
       .pointLat((d) => d.lat)
       .pointLng((d) => d.lng)
       .pointColor((d) => d.accent || "#10b981")
@@ -137,7 +152,7 @@ export function Globe3D({ markers = [], arcs = [], className, onMarkerHover, onM
       .pointsTransitionDuration(800);
 
     globe
-      .labelsData(markers)
+      .labelsData(validMarkers)
       .labelLat((d) => d.lat)
       .labelLng((d) => d.lng)
       .labelText((d) => d.iata || "")
@@ -147,16 +162,8 @@ export function Globe3D({ markers = [], arcs = [], className, onMarkerHover, onM
       .labelResolution(2)
       .labelAltitude(0.04);
 
-    const arcData = (arcs || []).map((a) => ({
-      startLat: a.from.lat,
-      startLng: a.from.lng,
-      endLat: a.to.lat,
-      endLng: a.to.lng,
-      color: a.color || "#10b981",
-      count: a.count || 1,
-    }));
     globe
-      .arcsData(arcData)
+      .arcsData(validArcs)
       .arcColor((a) => [a.color, a.color])
       .arcDashLength(0.4)
       .arcDashGap(0.15)

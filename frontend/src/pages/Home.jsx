@@ -15,6 +15,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import MapLibreTravelMap from "@/components/MapLibreTravelMap";
+import ComponentErrorBoundary from "@/components/ComponentErrorBoundary";
 import {
   AnimatedGlobeIcon,
   AnimatedPlaneIcon,
@@ -27,14 +28,27 @@ import {
   AnimatedTrophyIcon,
   AnimatedRouteIcon,
   AnimatedMapPinIcon,
-  AnimatedSparklesIcon
+  AnimatedSparklesIcon,
+  AnimatedRadarIcon,
+  AnimatedCompassIcon,
+  AnimatedLuggageScannerIcon,
+  AnimatedTurbulenceIcon,
+  AnimatedUserIcon,
+  AnimatedManualEntryIcon,
+  FlightLoadingAnimation
 } from "@/components/ui/AnimatedIcons";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const COLORS = ["hsl(var(--primary))", "hsl(var(--muted-foreground))", "#38bdf8"];
 
 const KpiTile = ({ label, value, suffix = "", icon: Icon, decimals = 0, testId, subtext, iconClass = "" }) => (
-  <div className="tl-card tl-card-intense tl-card-interactive p-4 flex flex-col justify-between h-28" data-testid={testId}>
+  <motion.div
+    whileHover={{ scale: 1.025, boxShadow: "0 12px 30px rgba(56,189,248,0.08)" }}
+    whileTap={{ scale: 0.98 }}
+    transition={{ type: "spring", stiffness: 400, damping: 20 }}
+    className="tl-card tl-card-intense tl-card-interactive p-4 flex flex-col justify-between h-28"
+    data-testid={testId}
+  >
     <div className="flex items-center justify-between">
       <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{label}</span>
       {Icon && <Icon size={24} className={iconClass || "text-muted-foreground"} />}
@@ -43,7 +57,7 @@ const KpiTile = ({ label, value, suffix = "", icon: Icon, decimals = 0, testId, 
       <CountUp value={value} decimals={decimals} suffix={suffix} />
     </p>
     {subtext && <p className="text-[10px] text-muted-foreground mt-1">{subtext}</p>}
-  </div>
+  </motion.div>
 );
 
 const glowShadows = {
@@ -144,13 +158,20 @@ const CustomPieTooltip = ({ active, payload }) => {
 };
 
 const ActionTile = ({ icon: Icon, title, desc, onClick, testId }) => (
-  <button onClick={onClick} className="tl-action-tile" data-testid={testId}>
+  <motion.button
+    onClick={onClick}
+    whileHover={{ scale: 1.025, translateY: -2 }}
+    whileTap={{ scale: 0.98 }}
+    transition={{ type: "spring", stiffness: 400, damping: 20 }}
+    className="tl-action-tile"
+    data-testid={testId}
+  >
     <span className="tl-action-icon"><Icon size={16} /></span>
     <span className="min-w-0 text-left">
       <span className="block text-sm font-semibold">{title}</span>
       <span className="block text-[11px] text-muted-foreground mt-0.5 leading-snug">{desc}</span>
     </span>
-  </button>
+  </motion.button>
 );
 
 /* ============ EMPTY STATE — First-time user ============ */
@@ -290,24 +311,75 @@ export default function Home() {
   const { profile, user } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [dashboardLoading, setDashboardLoading] = useState(true);
   const [detail, setDetail] = useState(null);
   const [citiesData, setCitiesData] = useState([]);
   const currentYear = new Date().getFullYear();
+  const [selectedYear, setSelectedYear] = useState("all");
   const [citiesYear, setCitiesYear] = useState(currentYear);
   const [mapRoutes, setMapRoutes] = useState({ routes: [], markers: [] });
+  const [flights, setFlights] = useState([]);
 
+  // 1. Check if ANY flights exist across all years, and determine default/active years
   useEffect(() => {
     (async () => {
       try {
-        const { data } = await api.get("/dashboard");
-        setData(data);
-      } catch {
-        // Silently fail on first load — empty state is shown instead
+        const { data: flightsList } = await api.get("/flights");
+        setFlights(flightsList || []);
+        
+        if (flightsList && flightsList.length > 0) {
+          const uniqueYears = Array.from(new Set(flightsList.map(f => {
+            const d = f.departure_time_utc || f.flight_date;
+            return d ? new Date(d).getFullYear() : null;
+          }).filter(Boolean))).sort((a, b) => b - a);
+
+          const currentYearStr = String(new Date().getFullYear());
+          const defaultYear = uniqueYears.map(String).includes(currentYearStr)
+            ? currentYearStr
+            : (uniqueYears[0] ? String(uniqueYears[0]) : "all");
+          
+          setSelectedYear(defaultYear);
+        }
+      } catch (err) {
+        console.error("Failed to load flights on mount:", err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     })();
   }, []);
 
+  // 2. Fetch dashboard data when selectedYear changes
+  useEffect(() => {
+    if (loading) return;
+    if (flights.length === 0) {
+      setData(null);
+      setDashboardLoading(false);
+      return;
+    }
+
+    (async () => {
+      setDashboardLoading(true);
+      try {
+        const { data: dashData } = await api.get("/dashboard", { params: { year: selectedYear } });
+        setData(dashData);
+      } catch (err) {
+        console.error("Failed to load dashboard data:", err);
+      } finally {
+        setDashboardLoading(false);
+      }
+    })();
+  }, [selectedYear, loading, flights.length]);
+
+  // 3. Keep citiesYear synchronized with selectedYear
+  useEffect(() => {
+    if (selectedYear !== "all") {
+      setCitiesYear(Number(selectedYear));
+    } else {
+      setCitiesYear("all");
+    }
+  }, [selectedYear]);
+
+  // 4. Fetch cities travelled list based on citiesYear
   useEffect(() => {
     if (!data?.total_flights) return;
     api.get("/cities", { params: { year: citiesYear } })
@@ -315,12 +387,13 @@ export default function Home() {
       .catch(() => setCitiesData([]));
   }, [citiesYear, data?.total_flights]);
 
+  // 5. Fetch map routes based on selectedYear
   useEffect(() => {
     if (!data?.total_flights) return;
-    api.get("/map-data", { params: { year: "all" } })
+    api.get("/map-data", { params: { year: selectedYear } })
       .then(({ data: res }) => setMapRoutes({ routes: res?.routes || [], markers: res?.airport_markers || [] }))
       .catch(() => {});
-  }, [data?.total_flights]);
+  }, [selectedYear, data?.total_flights]);
 
   const hello = profile?.preferred_name || (user?.name || "").split(" ")[0] || "there";
   const yr = new Date().getFullYear();
@@ -338,7 +411,7 @@ export default function Home() {
     ? data.insights[new Date().getDate() % data.insights.length]
     : null;
 
-  const hasFlights = !loading && data?.total_flights > 0;
+  const hasFlights = !loading && flights.length > 0;
 
   return (
     <Shell title={`Hello, ${hello}`} right={<span className="text-[11px] text-muted-foreground tl-mono">{profile?.home_airport_iata || "—"}</span>}>
@@ -353,6 +426,36 @@ export default function Home() {
         <EmptyDashboard navigate={navigate} hello={hello} />
       ) : (
         <div className="flex flex-col gap-5 p-4 pb-10 animate-fade-up">
+          {/* Year Selector Pills */}
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold mr-1 shrink-0">Year:</span>
+            <button
+              onClick={() => setSelectedYear("all")}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition shrink-0 ${
+                selectedYear === "all"
+                  ? "bg-primary text-primary-foreground border-primary shadow-[0_0_12px_rgba(59,130,246,0.3)]"
+                  : "bg-muted/40 hover:bg-muted text-muted-foreground border-border/55"
+              }`}
+            >
+              All Time
+            </button>
+            {Array.from(new Set(flights.map(f => {
+              const d = f.departure_time_utc || f.flight_date;
+              return d ? new Date(d).getFullYear() : null;
+            }).filter(Boolean))).sort((a, b) => b - a).map(y => (
+              <button
+                key={y}
+                onClick={() => setSelectedYear(String(y))}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition shrink-0 ${
+                  selectedYear === String(y)
+                    ? "bg-primary text-primary-foreground border-primary shadow-[0_0_12px_rgba(59,130,246,0.3)]"
+                    : "bg-muted/40 hover:bg-muted text-muted-foreground border-border/55"
+                }`}
+              >
+                {y}
+              </button>
+            ))}
+          </div>
           {/* Hero insight */}
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -409,19 +512,28 @@ export default function Home() {
 
           {/* Live map preview */}
           {mapRoutes.markers.length > 0 && (
-            <button
+            <motion.button
               onClick={() => navigate("/map")}
-              className="tl-card tl-card-intense tl-card-interactive overflow-hidden text-left group"
+              whileHover={{ scale: 1.015, translateY: -2 }}
+              whileTap={{ scale: 0.99 }}
+              transition={{ type: "spring", stiffness: 400, damping: 20 }}
+              className="tl-card tl-card-intense tl-card-interactive overflow-hidden text-left group relative"
               data-testid="home-map-preview"
             >
               <div className="relative h-48 overflow-hidden rounded-t-2xl pointer-events-none">
                 <div className="absolute inset-0 w-full h-full">
-                  <MapLibreTravelMap
-                    mapData={{ routes: mapRoutes.routes, airport_markers: mapRoutes.markers }}
-                    selectedYear="All"
-                  />
+                  <ComponentErrorBoundary>
+                    <MapLibreTravelMap
+                      mapData={{ routes: mapRoutes.routes, airport_markers: mapRoutes.markers }}
+                      selectedYear={selectedYear === "all" ? "All" : selectedYear}
+                    />
+                  </ComponentErrorBoundary>
                 </div>
                 <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
+                {/* Floating animated radar scope */}
+                <div className="absolute top-3 right-3 z-20 bg-background/80 backdrop-blur-md p-1.5 rounded-full border border-border/40 pointer-events-auto">
+                  <AnimatedRadarIcon size={36} />
+                </div>
               </div>
               <div className="p-4 -mt-6 relative z-10 flex items-center justify-between">
                 <div>
@@ -432,15 +544,15 @@ export default function Home() {
                 </div>
                 <ArrowRight size={14} className="text-muted-foreground group-hover:text-primary transition" />
               </div>
-            </button>
+            </motion.button>
           )}
 
           {/* KPI grid */}
           <div className="grid grid-cols-2 gap-3">
-            <KpiTile testId="kpi-flights" label="Flights taken" value={data?.total_flights || 0} icon={AnimatedPlaneIcon} subtext={`${data?.cities_visited || 0} cities explored`} />
-            <KpiTile testId="kpi-hours" label="Time in the sky" value={Math.round(data?.total_air_hours || 0)} icon={AnimatedClockIcon} subtext={`${airPct}% of your year airborne`} />
+            <KpiTile testId="kpi-flights" label="Flights taken" value={data?.total_flights || 0} icon={AnimatedRadarIcon} subtext={`${data?.cities_visited || 0} cities explored`} />
+            <KpiTile testId="kpi-hours" label="Time in the sky" value={Math.round(data?.total_air_hours || 0)} icon={AnimatedTurbulenceIcon} subtext={`${airPct}% of your year airborne`} />
             <KpiTile testId="kpi-home-days" label="Home base" value={Math.round(data?.home_days || 0)} icon={AnimatedHomeIcon} subtext={`${homePct}% cozy at home`} />
-            <KpiTile testId="kpi-away-days" label="Days exploring" value={Math.round(data?.away_days || 0)} icon={AnimatedBuildingIcon} subtext={`${awayPct}% out discovering`} />
+            <KpiTile testId="kpi-away-days" label="Days exploring" value={Math.round(data?.away_days || 0)} icon={AnimatedCompassIcon} subtext={`${awayPct}% out discovering`} />
           </div>
 
           {/* Home vs away ring */}

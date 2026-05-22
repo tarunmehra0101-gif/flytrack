@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, ArrowRight, BriefcaseBusiness, Check, MapPin, Plane, ShieldCheck, User2, Video } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -7,6 +7,7 @@ import { saveMockProfile, useAuth } from "@/contexts/AuthContext";
 import { Input } from "@/components/ui/input";
 import Autocomplete from "@/components/Autocomplete";
 import { supabase, supabaseEnabled } from "@/lib/supabaseClient";
+import { AnimatedUserIcon, AnimatedMapPinIcon, AnimatedPlaneIcon } from "@/components/ui/AnimatedIcons";
 
 
 export default function Onboarding() {
@@ -22,26 +23,36 @@ export default function Onboarding() {
   const [saveError, setSaveError] = useState(null);
   const profileSavedRef = useRef(false);
 
+  // Pre-fill user details after Google sign up
+  useEffect(() => {
+    if (!name) {
+      const detected = profile?.preferred_name || user?.user_metadata?.full_name || user?.user_metadata?.name || user?.name || "";
+      if (detected) {
+        setName(detected);
+      }
+    }
+  }, [user, profile, name]);
 
+  const avatarUrl = user?.user_metadata?.avatar_url || user?.user_metadata?.picture || user?.picture || null;
 
   const steps = [
     {
       key: "name",
-      icon: User2,
+      icon: AnimatedUserIcon,
       title: "Hey! What should we call you?",
       hint: "Just a first name — we like to keep it friendly.",
       valid: () => name.trim().length > 0,
     },
     {
       key: "home",
-      icon: MapPin,
+      icon: AnimatedMapPinIcon,
       title: "Where's home base for you?",
       hint: "This helps us figure out when you're traveling vs. at home.",
       valid: () => !!homeAirport?.iata,
     },
     {
       key: "persona",
-      icon: Plane,
+      icon: AnimatedPlaneIcon,
       title: "How do you usually travel?",
       hint: "We'll personalize your travel insights based on this.",
       valid: () => !!travelType,
@@ -158,8 +169,8 @@ export default function Onboarding() {
           {/* Standard header for non-gmail steps */}
           {step.key !== "gmail" && (
             <>
-              <div className="w-10 h-10 rounded-2xl bg-primary/12 text-primary flex items-center justify-center mb-6">
-                <Icon size={18} strokeWidth={2.2} />
+              <div className="mb-6 flex items-center justify-start">
+                <Icon size={44} />
               </div>
               <h2 className="text-[26px] font-light tracking-tight leading-snug">{step.title}</h2>
               <p className="text-sm text-muted-foreground mt-2">{step.hint}</p>
@@ -168,14 +179,28 @@ export default function Onboarding() {
 
           <div className="mt-10 flex-1">
             {step.key === "name" ? (
-              <Input
-                data-testid="onboarding-input-preferred_name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Suba"
-                autoFocus
-                className="bg-transparent border-0 border-b-2 border-border rounded-none px-0 text-2xl focus-visible:ring-0 focus-visible:border-primary h-14 tracking-tight"
-              />
+              <div className="flex items-center gap-4">
+                {avatarUrl && (
+                  <motion.img
+                    src={avatarUrl}
+                    alt="Profile Avatar"
+                    className="w-16 h-16 rounded-full border border-primary/30 object-cover shadow-[0_4px_12px_rgba(37,99,235,0.15)] flex-shrink-0"
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ duration: 0.4 }}
+                  />
+                )}
+                <div className="flex-1">
+                  <Input
+                    data-testid="onboarding-input-preferred_name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="e.g. Suba"
+                    autoFocus
+                    className="bg-transparent border-0 border-b-2 border-border rounded-none px-0 text-2xl focus-visible:ring-0 focus-visible:border-primary h-14 tracking-tight w-full"
+                  />
+                </div>
+              </div>
             ) : step.key === "home" ? (
               <Autocomplete
                 kind="airport"

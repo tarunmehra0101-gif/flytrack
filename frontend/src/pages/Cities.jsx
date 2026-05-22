@@ -74,11 +74,39 @@ const CITY_IMAGES = {
   MCT: "https://images.unsplash.com/photo-1559662780-c3bab6f7e00b?auto=format&fit=crop&w=600&q=60", // Muscat
 };
 
-/** Fallback: use city name to search Unsplash for a skyline photo (free, no key). */
+const PREMIUM_CITY_POOL = [
+  "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=600&q=60", // Chicago
+  "https://images.unsplash.com/photo-1519501025264-65ba15a82390?auto=format&fit=crop&w=600&q=60", // Tokyo
+  "https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?auto=format&fit=crop&w=600&q=60", // NYC Skyline
+  "https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?auto=format&fit=crop&w=600&q=60", // SF Streets
+  "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=60", // Yosemite Mountain
+  "https://images.unsplash.com/photo-1518391846015-55a9cc003b25?auto=format&fit=crop&w=600&q=60", // Tower Skyline
+  "https://images.unsplash.com/photo-1449034446853-66c86144b0ad?auto=format&fit=crop&w=600&q=60", // Golden Gate Sunset
+  "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=600&q=60", // Paris Street
+  "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=600&q=60", // Skyscrapers Morning
+  "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=600&q=60", // Misty Mountain Fog
+  "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=60", // Beach Sunset
+  "https://images.unsplash.com/photo-1520121401995-928cd50d4e27?auto=format&fit=crop&w=600&q=60", // Green Fields
+];
+
+function getStringHash(str) {
+  let hash = 0;
+  if (!str) return hash;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+/** Fallback: use city name/IATA to get a deterministic beautiful photo from our premium pool. */
 function cityImageUrl(iata, cityName) {
   if (CITY_IMAGES[iata]) return CITY_IMAGES[iata];
-  if (cityName) return `https://source.unsplash.com/600x400/?${encodeURIComponent(cityName)}+city+skyline`;
-  return "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=600&q=60";
+  const lookupKey = cityName || iata || "";
+  const hash = getStringHash(lookupKey);
+  const index = hash % PREMIUM_CITY_POOL.length;
+  return PREMIUM_CITY_POOL[index];
 }
 
 const DEFAULT_CITY_IMAGE = "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=600&q=60";

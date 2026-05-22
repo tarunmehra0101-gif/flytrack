@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { endLocalSession, getLocalProfile, hasLocalSession, importLedger, localUser, startLocalSession, updateLocalProfile } from "@/lib/localLedger";
+import { clearLocalLedgerOnly, endLocalSession, getLocalProfile, hasLocalSession, importLedger, localUser, startLocalSession, updateLocalProfile } from "@/lib/localLedger";
 import { publicAppUrl, supabase, supabaseEnabled } from "@/lib/supabaseClient";
 import { pullSupabaseLedger } from "@/lib/supabaseSync";
 
@@ -54,7 +54,8 @@ export function AuthProvider({ children }) {
         user_id: sbUser.id,
         email: sbUser.email,
         name: sbUser.user_metadata?.full_name || sbUser.user_metadata?.name || sbUser.email?.split("@")[0],
-        picture: sbUser.user_metadata?.avatar_url || null,
+        picture: sbUser.user_metadata?.avatar_url || sbUser.user_metadata?.picture || null,
+        user_metadata: sbUser.user_metadata || {},
         local_first: false,
       };
       const nextProfile = profileRow || {
@@ -68,7 +69,7 @@ export function AuthProvider({ children }) {
       };
       try {
         const ledger = await pullSupabaseLedger();
-        if (ledger) await importLedger({ ...ledger, profile: ledger.profile || nextProfile });
+        if (ledger) await importLedger({ ...ledger, profile: ledger.profile || nextProfile }, { replaceFlights: true });
       } catch (err) {
         console.warn("Ryoko Supabase ledger pull failed", err);
       }
@@ -114,6 +115,7 @@ export function AuthProvider({ children }) {
       await supabase.auth.signOut();
     }
     try { await api.post("/auth/logout"); } catch { endLocalSession(); }
+    try { await clearLocalLedgerOnly(); } catch (err) { console.warn("Failed to clear local ledger on logout:", err); }
     safeRemoveLocalStorage("tl_session_token");
     safeRemoveLocalStorage("gmail_provider_token");
     safeRemoveLocalStorage("gmail_provider_refresh_token");

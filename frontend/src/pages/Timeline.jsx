@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Clock4, MapPin, ChevronRight, ChevronDown, PlaneTakeoff, Building2, Home as HomeIcon, Search, Trash2, MoreHorizontal } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Clock4, MapPin, ChevronRight, ChevronDown, PlaneTakeoff, Building2, Home as HomeIcon, Search, Trash2, MoreHorizontal, Plane, Edit3, Check, X } from "lucide-react";
 import Shell from "@/components/shell/Shell";
-import BoardingPassCard from "@/components/BoardingPassCard";
-import FlightDetailSheet from "@/components/FlightDetailSheet";
+import BoardingPassCard, { AIRLINE_BRANDS } from "@/components/BoardingPassCard";
+import AirlineLogo from "@/components/AirlineLogo";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -38,6 +39,75 @@ function fmtDuration(minutes, type, isHome, city) {
   return days >= 1 ? `${days.toFixed(1)} days in ${city}` : `${hrs}h in ${city}`;
 }
 
+// Custom compact flight stub component matching the airline branding color
+function FlightStub({ flight, onClick }) {
+  const { airline_iata, airline_name, flight_number, departure_airport_iata, arrival_airport_iata, departure_time_local, departure_time_utc, flight_date, seat_number } = flight;
+  
+  const brand = AIRLINE_BRANDS[String(airline_iata).toUpperCase()] || {
+    bg: "bg-gradient-to-br from-white/10 via-white/5 to-transparent backdrop-blur-xl border border-white/20 text-white shadow-lg",
+    textMuted: "text-white/50",
+    textPrimary: "text-white",
+    accentBadge: "bg-white/15 text-white border-white/20",
+  };
+  
+  const depTimeStr = (() => {
+    try {
+      const t = departure_time_local || departure_time_utc;
+      if (!t) return "—";
+      if (String(t).match(/^\d{1,2}[:.]\d{2}/)) return String(t).replace(".", ":").slice(0, 5);
+      return new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    } catch { return "—"; }
+  })();
+
+  const dateStr = (() => {
+    try {
+      const d = flight_date || departure_time_utc;
+      if (!d) return "";
+      const dateObj = String(d).length === 10 ? new Date(`${d}T00:00:00`) : new Date(d);
+      return dateObj.toLocaleDateString([], { day: "2-digit", month: "short" });
+    } catch { return ""; }
+  })();
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full h-[76px] ${brand.bg} rounded-[20px] p-3 flex items-center justify-between border relative overflow-hidden transition-all duration-300 hover:scale-[1.015] active:scale-[0.985] shadow-lg`}
+    >
+      {/* Brand logo & flight ID */}
+      <div className="flex items-center gap-2.5 min-w-0">
+        <div className="bg-white/95 p-1 rounded-lg flex items-center justify-center flex-shrink-0 w-8 h-8">
+          <AirlineLogo iata={airline_iata} size={24} />
+        </div>
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-wider font-semibold opacity-75">{dateStr} · {depTimeStr}</p>
+          <p className="text-sm font-bold truncate mt-0.5">{airline_name || brand.name || airline_iata} {flight_number || ""}</p>
+        </div>
+      </div>
+      
+      {/* Route illustration */}
+      <div className="flex items-center gap-2 px-2 flex-1 justify-center max-w-[150px]">
+        <span className="font-mono text-sm font-extrabold tracking-wider">{departure_airport_iata}</span>
+        <div className="flex-1 flex flex-col items-center min-w-[30px]">
+          <Plane size={10} className="transform rotate-90 opacity-80" />
+          <div className="w-full border-b border-dashed opacity-30 mt-0.5" />
+        </div>
+        <span className="font-mono text-sm font-extrabold tracking-wider">{arrival_airport_iata}</span>
+      </div>
+
+      {/* Seat Badge & expand indicator */}
+      <div className="flex items-center gap-2 flex-shrink-0">
+        {seat_number && (
+          <span className={`px-2 py-0.5 rounded-full border text-[9px] font-mono tracking-wider ${brand.accentBadge}`}>
+            {seat_number}
+          </span>
+        )}
+        <ChevronRight size={14} className="opacity-60" />
+      </div>
+    </button>
+  );
+}
+
 export default function Timeline() {
   const navigate = useNavigate();
   const [trips, setTrips] = useState([]);
@@ -46,9 +116,13 @@ export default function Timeline() {
   const [flights, setFlights] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState({});
-  const [selectedFlight, setSelectedFlight] = useState(null);
   const [query, setQuery] = useState("");
   const [overflowOpen, setOverflowOpen] = useState(null);
+
+  // States for inline expandable morphing flights
+  const [expandedFlights, setExpandedFlights] = useState({});
+  const [editingFlightId, setEditingFlightId] = useState(null);
+  const [editedFlights, setEditedFlights] = useState({});
 
   const loadData = useCallback(async () => {
     try {
@@ -80,6 +154,31 @@ export default function Timeline() {
     }
   };
 
+  const handleSaveFlight = async (flightId) => {
+    const updatedData = editedFlights[flightId];
+    if (!updatedData) {
+      setEditingFlightId(null);
+      return;
+    }
+    try {
+      await api.patch(`/flights/${flightId}`, updatedData);
+      toast.success("Flight details updated successfully");
+      setEditingFlightId(null);
+      await loadData();
+    } catch (err) {
+      toast.error("Couldn't update flight details");
+    }
+  };
+
+  const handleCancelEdit = (flightId) => {
+    setEditingFlightId(null);
+    setEditedFlights((prev) => {
+      const next = { ...prev };
+      delete next[flightId];
+      return next;
+    });
+  };
+
   useEffect(() => { loadData(); }, [loadData]);
 
   const hasContent = trips.length > 0 || pending.length > 0 || windows.length > 0;
@@ -91,6 +190,7 @@ export default function Timeline() {
       const q = query.trim().toLowerCase();
       return [w.route, w.city_name, w.airport_iata, w.type].some((x) => String(x || "").toLowerCase().includes(q));
     });
+  
   const flightByRouteTime = (w) => flights.find((f) => (
     f.id === w.segment_id ||
     (w.route && `${f.departure_airport_iata}-${f.arrival_airport_iata}` === w.route && (!w.start_time_utc || f.departure_time_utc === w.start_time_utc))
@@ -153,6 +253,7 @@ export default function Timeline() {
                   const flight = w.type === "flight" ? flightByRouteTime(w) : null;
                   const month = fmtMonth(w.start_time_utc);
                   const prevMonth = idx > 0 ? fmtMonth(filteredWindows[idx - 1].start_time_utc) : null;
+                  
                   return (
                     <React.Fragment key={w.id}>
                     {month !== prevMonth && (
@@ -162,56 +263,123 @@ export default function Timeline() {
                     )}
                     <li className="relative">
                       <span className={`absolute -left-[22px] top-4 w-3 h-3 rounded-full ring-4 ring-background ${w.type === "flight" ? "bg-primary" : w.is_home ? "bg-emerald-500" : "bg-muted-foreground"}`} />
-                      <button
-                        type="button"
-                        onClick={() => flight && setSelectedFlight(flight)}
-                        className={`w-full text-left tl-card p-4 flex items-start gap-3 ${flight ? "hover:border-primary/40 transition" : ""}`}
-                      >
-                        <div className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center">
-                          <Icon size={15} />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">{fmtDate(w.start_time_utc)}{w.type === "flight" && (flight?.departure_time_local || flight?.departure_time_utc) ? ` · ${(() => { try { const t = flight.departure_time_local || flight.departure_time_utc; if (String(t).match(/^\d{1,2}[:.]\d{2}/)) return String(t).replace(".", ":").slice(0, 5); return new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); } catch { return ""; } })()}` : ""}</p>
-                          <p className="text-sm font-semibold mt-0.5 capitalize">
-                            {w.type === "flight"
-                              ? `${flight?.airline_name || "Flight"} ${flight?.flight_number || ""} · ${w.route}`
-                              : w.is_home
+                      
+                      {w.type === "flight" && flight ? (
+                        <motion.div layout className="w-full">
+                          <AnimatePresence mode="wait">
+                            {!expandedFlights[flight.id] ? (
+                              <motion.div
+                                key="collapsed-stub"
+                                layoutId={`flight-card-container-${flight.id}`}
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                className="relative"
+                              >
+                                <FlightStub
+                                  flight={flight}
+                                  onClick={() => setExpandedFlights((prev) => ({ ...prev, [flight.id]: true }))}
+                                />
+                                <div className="absolute right-12 bottom-5">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); setOverflowOpen(overflowOpen === flight.id ? null : flight.id); }}
+                                    className="text-white/60 hover:text-white transition-colors p-1.5 rounded-md hover:bg-white/10"
+                                    title="More options"
+                                  >
+                                    <MoreHorizontal size={14} />
+                                  </button>
+                                  {overflowOpen === flight.id && (
+                                    <div className="absolute right-0 bottom-full mb-1 bg-[#0f172a]/95 border border-white/20 backdrop-blur-xl rounded-xl shadow-2xl z-50 min-w-[140px] py-1 animate-fade-up">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => { setOverflowOpen(null); handleDeleteFlight(flight, e); }}
+                                        className="w-full px-3 py-2 text-left text-sm text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2"
+                                      >
+                                        <Trash2 size={13} /> Delete flight
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </motion.div>
+                            ) : (
+                              <motion.div
+                                key="expanded-card"
+                                layoutId={`flight-card-container-${flight.id}`}
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ type: "spring", stiffness: 350, damping: 26 }}
+                                className="flex flex-col gap-3 w-full"
+                              >
+                                <BoardingPassCard
+                                  flight={editedFlights[flight.id] || flight}
+                                  isEditable={editingFlightId === flight.id}
+                                  onChange={(updated) => setEditedFlights((prev) => ({ ...prev, [flight.id]: updated }))}
+                                />
+                                
+                                <div className="flex gap-2 justify-end px-1">
+                                  {editingFlightId === flight.id ? (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleCancelEdit(flight.id)}
+                                        className="px-4 py-2 rounded-full border border-white/10 hover:bg-white/5 transition text-xs font-semibold flex items-center gap-1.5 backdrop-blur bg-white/5 text-white"
+                                      >
+                                        <X size={12} /> Cancel
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSaveFlight(flight.id)}
+                                        className="px-4 py-2 rounded-full bg-primary hover:bg-primary/90 transition text-xs font-semibold text-primary-foreground flex items-center gap-1.5 shadow-lg shadow-primary/20"
+                                      >
+                                        <Check size={12} /> Save Changes
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => setExpandedFlights((prev) => ({ ...prev, [flight.id]: false }))}
+                                        className="px-4 py-2 rounded-full border border-white/10 hover:bg-white/5 transition text-xs font-semibold flex items-center gap-1.5 backdrop-blur bg-white/5 text-white"
+                                      >
+                                        Collapse
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setEditingFlightId(flight.id)}
+                                        className="px-4 py-2 rounded-full bg-white/10 hover:bg-white/15 transition text-xs font-semibold flex items-center gap-1.5 text-white backdrop-blur border border-white/10"
+                                      >
+                                        <Edit3 size={12} /> Edit Ticket
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </motion.div>
+                      ) : (
+                        <div
+                          className="w-full text-left tl-card p-4 flex items-start gap-3"
+                        >
+                          <div className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center">
+                            <Icon size={15} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">{fmtDate(w.start_time_utc)}</p>
+                            <p className="text-sm font-semibold mt-0.5 capitalize">
+                              {w.is_home
                                 ? `Back home in ${w.city_name || "Bengaluru"}`
                                 : w.city_name || w.airport_iata || w.type}
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {fmtDuration(w.duration_minutes, w.type, w.is_home, w.city_name)}
-                          </p>
-                          {w.type === "flight" && flight?.seat_number && (
-                            <p className="text-[11px] text-muted-foreground mt-1">Seat {flight.seat_number} · {flight.cabin_class || "Economy"}</p>
-                          )}
-                          {w.type !== "flight" && (
-                            <span className="mt-2 inline-block text-[11px] text-primary">Add note</span>
-                          )}
-                        </div>
-                        {flight && <ChevronRight size={15} className="text-muted-foreground mt-3" />}
-                      </button>
-                      {flight && (
-                        <div className="absolute right-3 bottom-3">
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); setOverflowOpen(overflowOpen === flight.id ? null : flight.id); }}
-                            className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded-md hover:bg-secondary"
-                            title="More options"
-                          >
-                            <MoreHorizontal size={14} />
-                          </button>
-                          {overflowOpen === flight.id && (
-                            <div className="absolute right-0 bottom-full mb-1 bg-popover border border-border rounded-lg shadow-lg z-50 min-w-[140px] py-1 animate-fade-up">
-                              <button
-                                type="button"
-                                onClick={(e) => { setOverflowOpen(null); handleDeleteFlight(flight, e); }}
-                                className="w-full px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10 transition-colors flex items-center gap-2"
-                              >
-                                <Trash2 size={13} /> Delete flight
-                              </button>
-                            </div>
-                          )}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {fmtDuration(w.duration_minutes, w.type, w.is_home, w.city_name)}
+                            </p>
+                            {w.type !== "flight" && (
+                              <span className="mt-2 inline-block text-[11px] text-primary">Add note</span>
+                            )}
+                          </div>
                         </div>
                       )}
                     </li>
@@ -233,7 +401,7 @@ export default function Timeline() {
                   const isOpen = expanded[t.id];
                   return (
                     <li key={t.id} className="relative" data-testid={`trip-${t.id}`}>
-                      <span className={`absolute -left-[22px] top-3 w-3 h-3 rounded-full ring-4 ring-background ${t.returned_home ? "bg-primary" : "bg-amber-500"}`} />
+                      <span className={`absolute -left-[22px] top-3 w-3 h-3 rounded-full ring-4 ring-background ${t.returned_home ? "bg-primary" : "bg-emerald-500"}`} />
                       <button
                         onClick={() => setExpanded((p) => ({ ...p, [t.id]: !p[t.id] }))}
                         className="w-full text-left tl-card p-4 hover:border-primary/40 transition"
@@ -294,11 +462,6 @@ export default function Timeline() {
           </div>
         ) : null}
       </div>
-      <FlightDetailSheet
-        flight={selectedFlight}
-        open={!!selectedFlight}
-        onOpenChange={(v) => !v && setSelectedFlight(null)}
-      />
     </Shell>
   );
 }

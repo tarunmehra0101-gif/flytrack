@@ -26,6 +26,7 @@ import {
   recomputeAnalytics,
   searchLocalFlights,
   trips,
+  updateFlight,
   updateLocalProfile,
   updateSegment,
   wrapped,
@@ -60,11 +61,33 @@ function payload(config) {
 }
 
 async function localEndpoint(config) {
-  if (!LOCAL_FIRST || typeof window === "undefined") return null;
   const path = (config.url || "").replace(config.baseURL || "", "").split("?")[0];
   const method = (config.method || "get").toLowerCase();
   const params = config.params || {};
   const year = params.year === "all" ? "all" : Number(params.year || new Date().getFullYear());
+
+  // Intercept local-only backup/restore utilities regardless of LOCAL_FIRST settings
+  if (path === "/local/export" && method === "get") return asResponse(config, await exportLedger());
+  if (path === "/local/import" && method === "post") {
+    await importLedger(payload(config));
+    return asResponse(config, { ok: true });
+  }
+  if (path === "/local/delete-all" && method === "post") {
+    await deleteAllLocalData();
+    if (!LOCAL_FIRST) {
+      try {
+        const token = typeof window !== "undefined" ? localStorage.getItem("tl_session_token") : null;
+        await axios.post(`${API_BASE}/local/delete-all`, {}, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+      } catch (err) {
+        console.warn("Failed to delete backend data:", err);
+      }
+    }
+    return asResponse(config, { ok: true });
+  }
+
+  if (typeof window === "undefined") return null;
 
   if (path === "/auth/me" && method === "get") {
     return asResponse(config, { user: localUser(), profile: await getLocalProfile() });
@@ -118,6 +141,9 @@ async function localEndpoint(config) {
     await deleteFlight(path.split("/").pop());
     return asResponse(config, { ok: true });
   }
+  if (path.match(/^\/flights\/[^/]+$/) && method === "patch") {
+    return asResponse(config, await updateFlight(path.split("/").pop(), payload(config)));
+  }
   if (path === "/trips" && method === "get") return asResponse(config, await trips(year));
   if (path === "/city-stays" && method === "get") return asResponse(config, await cityStays(year));
   if (path === "/artifacts" && method === "get") return asResponse(config, await listArtifacts());
@@ -156,15 +182,6 @@ async function localEndpoint(config) {
   if (path === "/flights/search" && method === "get") return asResponse(config, searchLocalFlights(params));
   if (path === "/flights/lookup" && method === "get") {
     return asResponse(config, lookupLocalFlight(params));
-  }
-  if (path === "/local/export" && method === "get") return asResponse(config, await exportLedger());
-  if (path === "/local/import" && method === "post") {
-    await importLedger(payload(config));
-    return asResponse(config, { ok: true });
-  }
-  if (path === "/local/delete-all" && method === "post") {
-    await deleteAllLocalData();
-    return asResponse(config, { ok: true });
   }
 
   return null;

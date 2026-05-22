@@ -4,6 +4,7 @@ import { lookupCatalogFlight, searchFlightCatalog } from "@/data/flightCatalog";
 import { parseTicketText } from "@/lib/ticketParser";
 import { extractPdfText } from "@/lib/ticketText";
 import { deleteFlightFromSupabase, pushFlightToSupabase, deleteAllSupabaseData } from "@/lib/supabaseSync";
+import { supabase, supabaseEnabled } from "@/lib/supabaseClient";
 
 const DB_NAME = "ryoko_local_ledger";
 const DB_VERSION = 1;
@@ -18,7 +19,25 @@ function nowIso() {
 }
 
 function uid(prefix) {
+  if (prefix === "segment" || prefix === "artifact" || prefix === "flight") {
+    return generateUuid();
+  }
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+
+function generateUuid() {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+async function supabaseUserId() {
+  if (!supabaseEnabled) return null;
+  const { data: { user } } = await supabase.auth.getUser();
+  return user?.id || null;
 }
 
 function openDb() {
@@ -55,36 +74,302 @@ function request(req) {
 }
 
 async function all(store) {
+  if (supabaseEnabled) {
+    const userId = await supabaseUserId();
+    if (!userId) return [];
+    if (store === "flights") {
+      const { data, error } = await supabase
+        .from("flights")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("status", "confirmed")
+        .order("departure_time_utc", { ascending: true });
+      if (error) {
+        console.warn("Supabase all flights error:", error);
+        return [];
+      }
+      return data || [];
+    }
+    if (store === "segments") {
+      const { data, error } = await supabase
+        .from("flights")
+        .select("*")
+        .eq("user_id", userId)
+        .in("status", ["pending_review", "parsed"])
+        .order("created_at", { ascending: true });
+      if (error) {
+        console.warn("Supabase all segments error:", error);
+        return [];
+      }
+      return data || [];
+    }
+    if (store === "artifacts") {
+      const { data, error } = await supabase
+        .from("ticket_artifacts")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: true });
+      if (error) {
+        console.warn("Supabase all artifacts error:", error);
+        return [];
+      }
+      return data || [];
+    }
+    return [];
+  }
   return tx(store, "readonly", (s) => request(s.getAll()));
 }
 
 async function get(store, id) {
+  if (supabaseEnabled) {
+    const userId = await supabaseUserId();
+    if (!userId) return null;
+    if (store === "flights" || store === "segments") {
+      const { data, error } = await supabase
+        .from("flights")
+        .select("*")
+        .eq("id", id)
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (error) {
+        console.warn("Supabase get flight/segment error:", error);
+        return null;
+      }
+      return data;
+    }
+    if (store === "artifacts") {
+      const { data, error } = await supabase
+        .from("ticket_artifacts")
+        .select("*")
+        .eq("id", id)
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (error) {
+        console.warn("Supabase get artifact error:", error);
+        return null;
+      }
+      return data;
+    }
+    return null;
+  }
   return tx(store, "readonly", (s) => request(s.get(id)));
 }
 
+const FLIGHT_COLUMNS = [
+  "id", "user_id", "source_parsed_segment_id", "source_type", "airline_iata", "airline_name", "flight_number", "passenger_name", "booking_reference", "pnr", "ticket_number", "departure_airport_iata", "arrival_airport_iata", "departure_city_name", "arrival_city_name", "departure_country_code", "arrival_country_code", "departure_lat", "departure_lng", "arrival_lat", "arrival_lng", "departure_time_utc", "arrival_time_utc", "departure_time_local", "arrival_time_local", "flight_date", "flight_duration_minutes", "duration_source", "time_confidence", "distance_km", "aircraft_type", "cabin_class", "seat_number", "terminal_departure", "terminal_arrival", "gate", "route", "confidence", "confidence_score", "parser_rule", "missing_fields", "canonical_hash", "status", "created_at", "updated_at"
+];
+
+const ARTIFACT_COLUMNS = [
+  "id", "user_id", "source_type", "original_filename", "display_title", "parser_status", "parse_confidence", "parser_method", "parser_error", "created_at", "updated_at", "raw_text"
+];
+
+function cleanFlightRow(doc) {
+  const next = {};
+  FLIGHT_COLUMNS.forEach((col) => {
+    if (doc[col] !== undefined) next[col] = doc[col];
+  });
+  return next;
+}
+
+function cleanArtifactRow(doc) {
+  const next = {};
+  ARTIFACT_COLUMNS.forEach((col) => {
+    if (doc[col] !== undefined) next[col] = doc[col];
+  });
+  return next;
+}
+
 async function put(store, doc) {
+  if (supabaseEnabled) {
+    const userId = await supabaseUserId();
+    if (!userId) return doc;
+    const nextDoc = { ...doc, user_id: userId, updated_at: nowIso() };
+    if (!nextDoc.id || !String(nextDoc.id).match(/^[0-9a-f-]{36}$/i)) {
+      nextDoc.id = generateUuid();
+    }
+    if (store === "flights") {
+      nextDoc.status = nextDoc.status || "confirmed";
+      const cleaned = cleanFlightRow(nextDoc);
+      const { data, error } = await supabase
+        .from("flights")
+        .upsert(cleaned)
+        .select()
+        .single();
+      if (error) {
+        console.warn("Supabase put flight error:", error);
+        throw error;
+      }
+      return data;
+    }
+    if (store === "segments") {
+      nextDoc.status = nextDoc.status || "pending_review";
+      const cleaned = cleanFlightRow(nextDoc);
+      const { data, error } = await supabase
+        .from("flights")
+        .upsert(cleaned)
+        .select()
+        .single();
+      if (error) {
+        console.warn("Supabase put segment error:", error);
+        throw error;
+      }
+      return data;
+    }
+    if (store === "artifacts") {
+      const cleaned = cleanArtifactRow(nextDoc);
+      const { data, error } = await supabase
+        .from("ticket_artifacts")
+        .upsert(cleaned)
+        .select()
+        .single();
+      if (error) {
+        console.warn("Supabase put artifact error:", error);
+        throw error;
+      }
+      return data;
+    }
+    return doc;
+  }
   await tx(store, "readwrite", (s) => s.put(doc));
   return doc;
 }
 
 async function del(store, id) {
+  if (supabaseEnabled) {
+    const userId = await supabaseUserId();
+    if (!userId) return;
+    if (store === "flights" || store === "segments") {
+      const { error } = await supabase
+        .from("flights")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", userId);
+      if (error) console.warn("Supabase delete flight/segment error:", error);
+      return;
+    }
+    if (store === "artifacts") {
+      const { error } = await supabase
+        .from("ticket_artifacts")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", userId);
+      if (error) console.warn("Supabase delete artifact error:", error);
+      return;
+    }
+    return;
+  }
   await tx(store, "readwrite", (s) => s.delete(id));
 }
 
 async function clear(store) {
+  if (supabaseEnabled) {
+    const userId = await supabaseUserId();
+    if (!userId) return;
+    if (store === "flights") {
+      await supabase.from("flights").delete().eq("user_id", userId).eq("status", "confirmed");
+    } else if (store === "segments") {
+      await supabase.from("flights").delete().eq("user_id", userId).eq("status", "pending_review");
+    } else if (store === "artifacts") {
+      await supabase.from("ticket_artifacts").delete().eq("user_id", userId);
+    }
+    return;
+  }
   await tx(store, "readwrite", (s) => s.clear());
 }
 
 async function getKv(id, fallback = null) {
+  if (supabaseEnabled) {
+    const userId = await supabaseUserId();
+    if (!userId) return fallback;
+    if (id === "profile") {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .maybeSingle();
+      if (error) console.warn("Supabase get profile error:", error);
+      return data || fallback;
+    }
+    if (id.startsWith("dashboard_") || id.startsWith("wrapped_")) {
+      const parts = id.split("_");
+      const key = parts[0];
+      const year = Number(parts[1]);
+      const { data, error } = await supabase
+        .from("analytics_snapshots")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("year", year)
+        .maybeSingle();
+      if (error) console.warn("Supabase get analytics error:", error);
+      if (data) {
+        return key === "dashboard" ? data.dashboard : data.wrapped;
+      }
+      return fallback;
+    }
+    try {
+      const v = localStorage.getItem(`ryoko_kv_${id}`);
+      return v ? JSON.parse(v) : fallback;
+    } catch {
+      return fallback;
+    }
+  }
   const row = await get("kv", id);
   return row ? row.value : fallback;
 }
 
 async function setKv(id, value) {
+  if (supabaseEnabled) {
+    const userId = await supabaseUserId();
+    if (!userId) return { id, value };
+    if (id === "profile") {
+      const { data, error } = await supabase
+        .from("profiles")
+        .upsert({ ...value, id: userId, updated_at: nowIso() })
+        .select()
+        .single();
+      if (error) {
+        console.warn("Supabase set profile error:", error);
+        throw error;
+      }
+      return data;
+    }
+    if (id.startsWith("dashboard_") || id.startsWith("wrapped_")) {
+      const parts = id.split("_");
+      const key = parts[0];
+      const year = Number(parts[1]);
+      const { data: existing } = await supabase
+        .from("analytics_snapshots")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("year", year)
+        .maybeSingle();
+      const snapshot = {
+        user_id: userId,
+        year,
+        dashboard: key === "dashboard" ? value : (existing?.dashboard || {}),
+        wrapped: key === "wrapped" ? value : (existing?.wrapped || {}),
+        updated_at: nowIso()
+      };
+      if (existing) snapshot.id = existing.id;
+      const { data, error } = await supabase
+        .from("analytics_snapshots")
+        .upsert(snapshot)
+        .select()
+        .single();
+      if (error) console.warn("Supabase set analytics error:", error);
+      return data;
+    }
+    try {
+      localStorage.setItem(`ryoko_kv_${id}`, JSON.stringify(value));
+    } catch {}
+    return { id, value };
+  }
   return put("kv", { id, value, updated_at: nowIso() });
 }
 
 async function markDirty() {
+  const current = await getKv("analytics_revision", 0);
+  await setKv("analytics_revision", current + 1);
   await setKv(DIRTY_KEY, true);
 }
 
@@ -181,7 +466,7 @@ function normalizeFlight(raw) {
   return {
     id: raw.id || uid("flight"),
     source_parsed_segment_id: raw.source_parsed_segment_id || raw.id || null,
-    status: raw.status || "confirmed",
+    status: (raw.status === "confirmed" || raw.status === "duplicate") ? raw.status : "confirmed",
     source_type: raw.source_type || "manual_entry",
     airline_iata: String(raw.airline_iata || "").toUpperCase(),
     airline_name: raw.airline_name || airlineName(raw.airline_iata),
@@ -445,12 +730,32 @@ async function createArtifact({ source_type, original_filename, raw_text = "", p
     created_at: nowIso(),
     updated_at: nowIso(),
   };
-  await put("artifacts", artifact);
+  try {
+    await put("artifacts", artifact);
+  } catch (err) {
+    console.error("Failed to persist artifact to remote database:", err);
+    try {
+      await tx("artifacts", "readwrite", (s) => s.put(artifact));
+    } catch (localErr) {
+      console.error("Local database fallback also failed:", localErr);
+    }
+  }
   return artifact;
 }
 
 async function saveSegments(segments) {
-  for (const segment of segments) await put("segments", segment);
+  for (const segment of segments) {
+    try {
+      await put("segments", segment);
+    } catch (err) {
+      console.error("Failed to persist segment to remote database:", err);
+      try {
+        await tx("segments", "readwrite", (s) => s.put(segment));
+      } catch (localErr) {
+        console.error("Local database fallback for segment failed:", localErr);
+      }
+    }
+  }
   return segments;
 }
 
@@ -650,6 +955,37 @@ export async function deleteFlight(id) {
   await markDirty();
 }
 
+export async function updateFlight(id, updates) {
+  const flight = await get("flights", id);
+  if (!flight) throw new Error("Flight not found");
+
+  const filteredUpdates = { ...updates };
+  if (updates.departure_airport_iata && updates.departure_airport_iata.toUpperCase() !== flight.departure_airport_iata) {
+    delete filteredUpdates.departure_city_name;
+    delete filteredUpdates.departure_country_code;
+    delete filteredUpdates.departure_lat;
+    delete filteredUpdates.departure_lng;
+    delete filteredUpdates.distance_km;
+  }
+  if (updates.arrival_airport_iata && updates.arrival_airport_iata.toUpperCase() !== flight.arrival_airport_iata) {
+    delete filteredUpdates.arrival_city_name;
+    delete filteredUpdates.arrival_country_code;
+    delete filteredUpdates.arrival_lat;
+    delete filteredUpdates.arrival_lng;
+    delete filteredUpdates.distance_km;
+  }
+
+  const merged = { ...flight, ...filteredUpdates };
+  const next = normalizeFlight(merged);
+
+  await put("flights", next);
+  if (supabaseEnabled) {
+    await pushFlightToSupabase(next);
+  }
+  await markDirty();
+  return next;
+}
+
 export async function deleteArtifact(id) {
   await del("artifacts", id);
 }
@@ -715,20 +1051,82 @@ function buildPresenceWindows(flights, profile, year) {
     if (!next || !f.arrival_time_utc || !next.departure_time_utc) return;
     const gap = minutesBetween(f.arrival_time_utc, next.departure_time_utc);
     if (gap <= 0) return;
-    const isHome = f.arrival_airport_iata === home;
-    windows.push({
-      id: `stay_${f.id}_${next.id}`,
-      type: gap <= 720 ? "airport" : (isHome ? "home" : "city"),
-      airport_iata: f.arrival_airport_iata,
-      city_name: f.arrival_city_name,
-      country_code: f.arrival_country_code,
-      is_home: isHome,
-      start_time_utc: f.arrival_time_utc,
-      end_time_utc: next.departure_time_utc,
-      duration_minutes: gap,
-      estimated: gap <= 720,
-      layover: gap <= 720,
-    });
+
+    if (f.arrival_airport_iata !== next.departure_airport_iata) {
+      // Teleportation Gap Splitting Strategy
+      const duration1 = Math.round(gap * 0.4);
+      const transitDuration = Math.round(gap * 0.2);
+      const duration2 = gap - duration1 - transitDuration;
+
+      const isHome1 = f.arrival_airport_iata === home;
+      const isHome2 = next.departure_airport_iata === home;
+
+      const midTime1 = new Date(new Date(f.arrival_time_utc).getTime() + duration1 * 60000).toISOString();
+      const midTime2 = new Date(new Date(midTime1).getTime() + transitDuration * 60000).toISOString();
+
+      if (duration1 > 0) {
+        windows.push({
+          id: `stay_${f.id}_mid1`,
+          type: duration1 <= 720 ? "airport" : (isHome1 ? "home" : "city"),
+          airport_iata: f.arrival_airport_iata,
+          city_name: f.arrival_city_name,
+          country_code: f.arrival_country_code,
+          is_home: isHome1,
+          start_time_utc: f.arrival_time_utc,
+          end_time_utc: midTime1,
+          duration_minutes: duration1,
+          estimated: true,
+          layover: duration1 <= 720,
+        });
+      }
+
+      if (transitDuration > 0) {
+        windows.push({
+          id: `stay_${f.id}_transit_${next.id}`,
+          type: "transit",
+          airport_iata: "TRN",
+          city_name: "Unknown / Transit",
+          country_code: "TR",
+          is_home: false,
+          start_time_utc: midTime1,
+          end_time_utc: midTime2,
+          duration_minutes: transitDuration,
+          estimated: true,
+          transit: true,
+        });
+      }
+
+      if (duration2 > 0) {
+        windows.push({
+          id: `stay_mid2_${next.id}`,
+          type: duration2 <= 720 ? "airport" : (isHome2 ? "home" : "city"),
+          airport_iata: next.departure_airport_iata,
+          city_name: next.departure_city_name,
+          country_code: next.departure_country_code,
+          is_home: isHome2,
+          start_time_utc: midTime2,
+          end_time_utc: next.departure_time_utc,
+          duration_minutes: duration2,
+          estimated: true,
+          layover: duration2 <= 720,
+        });
+      }
+    } else {
+      const isHome = f.arrival_airport_iata === home;
+      windows.push({
+        id: `stay_${f.id}_${next.id}`,
+        type: gap <= 720 ? "airport" : (isHome ? "home" : "city"),
+        airport_iata: f.arrival_airport_iata,
+        city_name: f.arrival_city_name,
+        country_code: f.arrival_country_code,
+        is_home: isHome,
+        start_time_utc: f.arrival_time_utc,
+        end_time_utc: next.departure_time_utc,
+        duration_minutes: gap,
+        estimated: gap <= 720,
+        layover: gap <= 720,
+      });
+    }
   });
   return windows;
 }
@@ -915,14 +1313,18 @@ export async function recomputeAnalytics(year = new Date().getFullYear()) {
   const wrapped = buildWrapped(flights, profile, year);
   await setKv(`dashboard_${year}`, dashboard);
   await setKv(`wrapped_${year}`, wrapped);
+  const rev = await getKv("analytics_revision", 0);
+  await setKv(`analytics_rev_${year}`, rev);
   await setKv(DIRTY_KEY, false);
   return { dashboard, wrapped, trips: buildTrips(flights, profile, year).length, city_stays: wrapped.presence_windows.filter((w) => w.type === "city" || w.type === "home").length, monthly_stats: dashboard.monthly_series.length };
 }
 
 async function ensureAnalytics(year) {
   const dirty = await getKv(DIRTY_KEY, true);
+  const rev = await getKv("analytics_revision", 0);
+  const computedRev = await getKv(`analytics_rev_${year}`, -1);
   const cached = await getKv(`dashboard_${year}`, null);
-  if (!dirty && cached) return;
+  if (!dirty && computedRev === rev && cached) return;
   await recomputeAnalytics(year);
 }
 
@@ -964,13 +1366,22 @@ export async function exportLedger() {
   };
 }
 
-export async function importLedger(payload) {
+export async function importLedger(payload, { replaceFlights = false } = {}) {
   if (!payload || typeof payload !== "object") throw new Error("Invalid Ryoko backup");
   if (payload.profile) await setKv("profile", payload.profile);
+  if (replaceFlights) {
+    await clear("flights");
+  }
   for (const row of payload.flights || []) await put("flights", normalizeFlight(row));
   for (const row of payload.segments || []) await put("segments", row);
   for (const row of payload.artifacts || []) await put("artifacts", row);
   for (const row of payload.notes || []) await put("notes", row);
+  await markDirty();
+}
+
+export async function clearLocalLedgerOnly() {
+  await Promise.all(STORE_NAMES.map((store) => clear(store)));
+  await getLocalProfile();
   await markDirty();
 }
 

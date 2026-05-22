@@ -11,6 +11,9 @@ import Autocomplete from "@/components/Autocomplete";
 export default function Settings() {
   const navigate = useNavigate();
   const { user, profile, fetchMe, logout, mockAuth, setProfile } = useAuth();
+  
+  const avatarUrl = user?.user_metadata?.avatar_url || user?.user_metadata?.picture || user?.picture || null;
+  const fullName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.name || "Traveler";
   const importRef = useRef(null);
   const [editOpen, setEditOpen] = useState(false);
   const [preferredName, setPreferredName] = useState(profile?.preferred_name || "");
@@ -135,15 +138,19 @@ export default function Settings() {
         {/* Profile */}
         <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Profile</p>
         <div className="tl-card p-4 flex items-center gap-4" data-testid="profile-card">
-          {user?.picture ? (
-            <img src={user.picture} alt="" className="w-12 h-12 rounded-full border border-border" />
+          {avatarUrl ? (
+            <img 
+              src={avatarUrl} 
+              alt={fullName} 
+              className="w-12 h-12 rounded-full border border-primary/30 object-cover shadow-[0_4px_12px_rgba(37,99,235,0.15)] flex-shrink-0 backdrop-blur-sm" 
+            />
           ) : (
             <div className="w-12 h-12 rounded-full bg-primary/15 text-primary flex items-center justify-center">
               <User2 size={18} />
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <p className="font-semibold truncate">{profile?.preferred_name || user?.name || "Private Flight Timeline"}</p>
+            <p className="font-semibold truncate">{profile?.preferred_name || fullName || "Private Flight Timeline"}</p>
             <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
             <p className="text-[11px] text-primary mt-1 capitalize">{(profile?.travel_profile_type || "frequent_flyer").replace("_", " ")}</p>
           </div>

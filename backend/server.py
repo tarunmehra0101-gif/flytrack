@@ -86,6 +86,7 @@ class BoardingPassIngestReq(BaseModel):
     barcode_string: str
     image_base64: Optional[str] = None
     original_filename: Optional[str] = None
+    visible_text: Optional[str] = None
     enrich: bool = True
 
 
@@ -1070,6 +1071,57 @@ async def delete_flight(flight_id: str, user: dict = Depends(_auth)):
     res = await db.confirmed_segments.delete_one({"id": flight_id, "user_id": user["user_id"]})
     await _recompute_for_user(user["user_id"])
     return {"ok": res.deleted_count == 1}
+
+
+@api.patch("/flights/{flight_id}")
+async def patch_flight(flight_id: str, payload: dict, user: dict = Depends(_auth)):
+    updates = {k: v for k, v in payload.items() if k not in ("_id", "id", "user_id") and v is not None}
+    if "airline_iata" in updates and updates["airline_iata"]:
+        updates["airline_iata"] = updates["airline_iata"].upper()
+    for k in ("departure_airport_iata", "arrival_airport_iata"):
+        if k in updates and updates[k]:
+            updates[k] = updates[k].upper()
+            
+    res = await db.confirmed_segments.update_one(
+        {"id": flight_id, "user_id": user["user_id"]},
+        {"$set": updates},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Flight not found")
+        
+    await _recompute_for_user(user["user_id"])
+    flight = await db.confirmed_segments.find_one({"id": flight_id, "user_id": user["user_id"]}, {"_id": 0})
+    return flight
+
+
+
+@api.post("/local/delete-all")
+async def delete_all_data(user: dict = Depends(_auth)):
+    user_id = user["user_id"]
+    await db.confirmed_segments.delete_many({"user_id": user_id})
+    await db.parsed_segments.delete_many({"user_id": user_id})
+    await db.artifacts.delete_many({"user_id": user_id})
+    await db.trips.delete_many({"user_id": user_id})
+    await db.city_stays.delete_many({"user_id": user_id})
+    await db.monthly_stats.delete_many({"user_id": user_id})
+    
+    # Reset profile metadata
+    now = datetime.now(timezone.utc).isoformat()
+    await db.user_profiles.update_one(
+        {"user_id": user_id},
+        {"$set": {
+            "home_city_name": None,
+            "home_airport_iata": None,
+            "home_country_code": None,
+            "work_city_name": None,
+            "onboarding_completed": False,
+            "theme_preference": "dark",
+            "units_preference": "metric",
+            "updated_at": now,
+        }},
+        upsert=True
+    )
+    return {"ok": True}
 
 
 @api.get("/trips")
