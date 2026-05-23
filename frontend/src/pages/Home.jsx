@@ -485,7 +485,7 @@ export default function Home() {
               {rotatedInsight && (
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{rotatedInsight}</p>
               )}
-              {data.next_trip && (
+              {data?.next_trip && (
                 <button
                   onClick={() => navigate("/timeline")}
                   className="mt-4 w-full tl-card tl-card-interactive p-3 flex items-center gap-3 text-left hover:border-primary/40 transition"

@@ -315,9 +315,10 @@ export default function Settings() {
           </button>
         </div>
 
-        <div className="flex items-center justify-center gap-2 mt-2 text-[11px] text-muted-foreground">
-          <Plane size={11} className="text-primary" />
-          Ryoko v2.3 · 旅行 · Built with ❤️
+        <div className="flex flex-col items-center justify-center mt-12 mb-8 text-muted-foreground/60">
+          <p className="font-semibold tracking-widest text-xs uppercase opacity-80 flex items-center gap-1.5">
+            Ryoko v3.0.0 · 旅行 · Built with ❤️
+          </p>
         </div>
       </div>
     </Shell>
