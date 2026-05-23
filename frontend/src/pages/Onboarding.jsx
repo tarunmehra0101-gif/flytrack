@@ -6,7 +6,6 @@ import { api } from "@/lib/api";
 import { saveMockProfile, useAuth } from "@/contexts/AuthContext";
 import { Input } from "@/components/ui/input";
 import Autocomplete from "@/components/Autocomplete";
-import { supabase, supabaseEnabled } from "@/lib/supabaseClient";
 import { AnimatedUserIcon, AnimatedMapPinIcon, AnimatedPlaneIcon } from "@/components/ui/AnimatedIcons";
 
 
@@ -80,14 +79,7 @@ export default function Onboarding() {
         profileSavedRef.current = true;
         return true;
       }
-      if (supabaseEnabled) {
-        const { data: { user: sbUser } } = await supabase.auth.getUser();
-        const row = { id: sbUser.id, ...updates, updated_at: new Date().toISOString() };
-        const { error } = await supabase.from("profiles").upsert(row, { onConflict: "id" });
-        if (error) throw error;
-      } else {
-        await api.patch("/profile", updates);
-      }
+      await api.patch("/profile", updates);
       const freshData = await fetchMe();
       if (freshData?.profile) setProfile(freshData.profile);
       profileSavedRef.current = true;

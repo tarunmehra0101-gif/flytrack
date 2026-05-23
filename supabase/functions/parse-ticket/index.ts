@@ -12,7 +12,17 @@ serve(async (req) => {
   }
 
   try {
-    const { text } = await req.json();
+    let payload: { text?: unknown };
+    try {
+      payload = await req.json();
+    } catch {
+      return new Response(JSON.stringify({ error: "Request body must be valid JSON" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const text = typeof payload.text === "string" ? payload.text.trim() : "";
     if (!text) {
       return new Response(JSON.stringify({ error: "Missing raw text in request body" }), {
         status: 400,

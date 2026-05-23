@@ -3,7 +3,7 @@ import { AIRLINES, AIRPORTS } from "@/data/airports";
 import { lookupCatalogFlight, searchFlightCatalog } from "@/data/flightCatalog";
 import { parseTicketText } from "@/lib/ticketParser";
 import { extractPdfText } from "@/lib/ticketText";
-import { deleteFlightFromSupabase, pushFlightToSupabase, deleteAllSupabaseData } from "@/lib/supabaseSync";
+import { deleteFlightFromSupabase, pushFlightToSupabase, deleteAllSupabaseData, pushProfileToSupabase } from "@/lib/supabaseSync";
 import { supabase, supabaseEnabled } from "@/lib/supabaseClient";
 
 const DB_NAME = "ryoko_local_ledger";
@@ -410,6 +410,9 @@ export async function updateLocalProfile(updates) {
   const current = await getLocalProfile();
   const next = { ...current, ...(updates || {}), updated_at: nowIso() };
   await setKv("profile", next);
+  if (supabaseEnabled) {
+    await pushProfileToSupabase(next);
+  }
   await markDirty();
   return next;
 }

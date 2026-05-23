@@ -56,6 +56,37 @@ function toFlightRow(flight, userId) {
   return row;
 }
 
+function toProfileRow(profile, userId) {
+  return {
+    id: userId,
+    preferred_name: profile?.preferred_name || null,
+    home_city_name: profile?.home_city_name || null,
+    home_airport_iata: profile?.home_airport_iata || null,
+    home_country_code: profile?.home_country_code || null,
+    work_city_name: profile?.work_city_name || null,
+    travel_profile_type: profile?.travel_profile_type || "frequent_flyer",
+    onboarding_completed: Boolean(profile?.onboarding_completed),
+    theme_preference: profile?.theme_preference || "dark",
+    units_preference: profile?.units_preference || "metric",
+    updated_at: profile?.updated_at || new Date().toISOString(),
+  };
+}
+
+export async function pushProfileToSupabase(profile) {
+  const userId = await currentUserId();
+  if (!userId || !profile) return null;
+  const { data, error } = await supabase
+    .from("profiles")
+    .upsert(toProfileRow(profile, userId), { onConflict: "id" })
+    .select()
+    .single();
+  if (error) {
+    console.warn("Ryoko Supabase profile sync failed", error);
+    return null;
+  }
+  return data;
+}
+
 export async function pushFlightToSupabase(flight) {
   const userId = await currentUserId();
   if (!userId || !flight) return null;

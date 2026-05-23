@@ -44,7 +44,11 @@ export default function Settings() {
     document.documentElement.classList.toggle("dark", next);
     setDark(next);
     localStorage.setItem("tl_theme", next ? "dark" : "light");
-    api.patch("/profile", { theme_preference: next ? "dark" : "light" }).catch(() => {});
+    api.patch("/profile", { theme_preference: next ? "dark" : "light" })
+      .then(({ data }) => {
+        if (data) setProfile(data);
+      })
+      .catch(() => {});
   };
 
   const saveProfile = async () => {
@@ -59,7 +63,8 @@ export default function Settings() {
         const nextProfile = await saveMockProfile(updates);
         setProfile(nextProfile);
       } else {
-        await api.patch("/profile", updates);
+        const { data: nextProfile } = await api.patch("/profile", updates);
+        setProfile(nextProfile);
       }
       await fetchMe();
       toast.success("Profile saved");
