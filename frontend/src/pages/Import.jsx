@@ -491,9 +491,42 @@ export default function Import() {
     setMAircraftType("");
   };
 
-  const reviewIt = () => {
-    const pending = previewSegments.find((s) => s?.status !== "confirmed" && s?.status !== "duplicate");
-    if (pending?.id) navigate(`/review/${pending.id}`);
+  const confirmAndSave = async () => {
+    const pending = previewSegments.filter(s => s.status !== "confirmed" && s.status !== "duplicate");
+    setStatus("looking_up");
+    try {
+      for (const seg of pending) {
+        let finalDuration = seg.flight_duration_minutes;
+        if (!finalDuration && seg.departure_time_local && seg.arrival_time_local) {
+          const depDate = new Date(seg.departure_time_local);
+          const arrDate = new Date(seg.arrival_time_local);
+          if (!isNaN(depDate) && !isNaN(arrDate)) {
+            finalDuration = Math.round((arrDate - depDate) / 60000);
+            if (finalDuration < 0) finalDuration += 24 * 60;
+          } else if (typeof seg.departure_time_local === "string" && typeof seg.arrival_time_local === "string") {
+            const depParts = seg.departure_time_local.match(/(\d{2}):(\d{2})/);
+            const arrParts = seg.arrival_time_local.match(/(\d{2}):(\d{2})/);
+            if (depParts && arrParts) {
+              const dh = parseInt(depParts[1], 10);
+              const dm = parseInt(depParts[2], 10);
+              const ah = parseInt(arrParts[1], 10);
+              const am = parseInt(arrParts[2], 10);
+              let diff = (ah * 60 + am) - (dh * 60 + dm);
+              if (diff < 0) diff += 24 * 60;
+              finalDuration = diff;
+            }
+          }
+        }
+        await api.post(`/segments/${seg.id}/confirm`, { ...seg, flight_duration_minutes: finalDuration });
+      }
+      setPreview(null);
+      setStatus("idle");
+      navigate("/timeline");
+      toast.success("Saved to timeline!");
+    } catch (e) {
+      toast.error("Failed to save some flights.");
+      setStatus("preview");
+    }
   };
 
   const isBusy = status === "reading" || status === "looking_up";
@@ -603,6 +636,17 @@ export default function Import() {
                   <div key={seg.id} className="flex flex-col gap-2">
                     <BoardingPassCard
                       flight={seg}
+                      isEditable={seg.status !== "confirmed" && seg.status !== "duplicate"}
+                      editMode="timings_only"
+                      onChange={(updatedSeg) => {
+                        setPreview(prev => {
+                          if (!prev) return prev;
+                          const updatedSegments = (prev.segments || [prev.segment]).map(s => 
+                            s.id === updatedSeg.id ? updatedSeg : s
+                          );
+                          return { ...prev, segments: updatedSegments, segment: updatedSegments[0] };
+                        });
+                      }}
                       footerRight={seg.status === "confirmed" ? (
                         <span className="px-2 py-0.5 rounded-full bg-primary/15 text-primary text-[10px] uppercase tracking-wider">saved</span>
                       ) : null}
@@ -620,12 +664,13 @@ export default function Import() {
               </div>
               <div className="flex gap-2 border-t border-border pt-4 mt-2">
                 <button
-                  onClick={reviewIt}
-                  disabled={!previewSegments.some((s) => s.status !== "confirmed" && s.status !== "duplicate")}
+                  onClick={confirmAndSave}
+                  disabled={!previewSegments.some((s) => s.status !== "confirmed" && s.status !== "duplicate") || isBusy}
                   className="flex-1 tl-btn-primary flex items-center justify-center gap-1.5 text-sm py-2.5"
                   data-testid="review-edit-btn"
                 >
-                  <CheckCircle2 size={14} /> Review and save
+                  {isBusy ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />} 
+                  {isBusy ? "Saving..." : "Save to Timeline"}
                 </button>
               </div>
             </div>
@@ -648,30 +693,33 @@ export default function Import() {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-5 bg-background p-4 rounded-2xl border border-border/50">
               {/* Airline Selection */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-muted-foreground">Airline *</label>
-                <Autocomplete
-                  kind="airline"
-                  value={mAirline}
-                  onSelect={(airline) => {
-                    setMAirline(airline);
-                    if (airline?.iata) {
-                      if (!mFlightNumber || !mFlightNumber.startsWith(airline.iata)) {
-                        setMFlightNumber(airline.iata);
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-bold text-foreground">Airline</label>
+                <div className="h-[46px] relative">
+                  <Autocomplete
+                    kind="airline"
+                    value={mAirline}
+                    onSelect={(airline) => {
+                      setMAirline(airline);
+                      if (airline?.iata) {
+                        if (!mFlightNumber || !mFlightNumber.startsWith(airline.iata)) {
+                          setMFlightNumber(airline.iata);
+                        }
                       }
-                    }
-                  }}
-                  testId="manual-airline"
-                />
+                    }}
+                    testId="manual-airline"
+                    className="w-full h-full text-base"
+                  />
+                </div>
               </div>
 
               {/* Flight Number Selection with Lookup button */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-muted-foreground">Flight Number *</label>
-                <div className="flex gap-2">
-                  <div className="flex-1">
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-bold text-foreground">Flight Number</label>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="flex-1 h-[46px] relative">
                     <Autocomplete
                       kind="flight"
                       value={mSelectedFlight || mFlightNumber}
@@ -683,16 +731,17 @@ export default function Import() {
                       extraParams={{ airline_iata: mAirline?.iata }}
                       placeholder="e.g. 101"
                       testId="manual-flight-number"
+                      className="w-full h-full text-base"
                     />
                   </div>
                   <button
                     type="button"
                     disabled={mFetching || !mAirline?.iata || !mFlightNumber.trim()}
                     onClick={fetchManualDetails}
-                    className="tl-btn-secondary px-3 flex items-center justify-center gap-1 text-xs self-start h-[38px] min-w-[110px]"
+                    className="tl-btn-secondary px-6 flex items-center justify-center gap-2 text-sm font-bold h-[46px] w-full sm:w-auto hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all shadow-sm"
                     data-testid="manual-lookup-btn"
                   >
-                    {mFetching ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                    {mFetching ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
                     Verify Flight
                   </button>
                 </div>

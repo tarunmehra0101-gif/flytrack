@@ -237,7 +237,7 @@ const getAirlineSuggestions = (query) => {
   return matches.slice(0, 5);
 };
 
-export default function BoardingPassCard({ flight, compact = false, footerRight = null, isEditable = false, onChange = () => {} }) {
+export default function BoardingPassCard({ flight, compact = false, footerRight = null, isEditable = false, editMode = "all", onChange = () => {} }) {
   const {
     airline_iata, airline_name, flight_number,
     departure_airport_iata, arrival_airport_iata,
@@ -249,7 +249,21 @@ export default function BoardingPassCard({ flight, compact = false, footerRight 
     booking_reference, pnr, aircraft_type
   } = flight || {};
 
-  const brand = AIRLINE_BRANDS[String(airline_iata).toUpperCase()] || {
+  let matchedBrand = AIRLINE_BRANDS[String(airline_iata).toUpperCase()];
+  if (!matchedBrand && airline_name) {
+    matchedBrand = Object.values(AIRLINE_BRANDS).find(b => 
+      b.name.toLowerCase() === airline_name.toLowerCase() || 
+      airline_name.toLowerCase().includes(b.name.toLowerCase())
+    );
+  }
+  if (!matchedBrand && flight_number) {
+    const prefix = String(flight_number).substring(0, 2).toUpperCase();
+    if (AIRLINE_BRANDS[prefix]) {
+      matchedBrand = AIRLINE_BRANDS[prefix];
+    }
+  }
+
+  const brand = matchedBrand || {
     name: airline_name,
     bg: "bg-gradient-to-br from-white/10 via-white/5 to-transparent backdrop-blur-xl border border-white/20 text-white shadow-[0_8px_32px_0_rgba(31,38,135,0.37)]",
     textMuted: "text-white/50",
@@ -259,6 +273,8 @@ export default function BoardingPassCard({ flight, compact = false, footerRight 
     inputBorder: "border-white/20 focus:border-white focus:ring-1 focus:ring-white/10",
     inputText: "text-white placeholder:text-white/30",
   };
+
+  const isAllEditable = isEditable && editMode === "all";
 
   const [showDepSuggestions, setShowDepSuggestions] = useState(false);
   const [showArrSuggestions, setShowArrSuggestions] = useState(false);
@@ -312,10 +328,10 @@ export default function BoardingPassCard({ flight, compact = false, footerRight 
       <div className={`px-6 pt-5 pb-3 flex items-start justify-between gap-3 border-b border-dashed ${brand.borderDashed}`}>
         <div className="flex items-center gap-3 min-w-0">
           <div className="bg-white/95 p-1 rounded-xl shadow-sm flex items-center justify-center flex-shrink-0">
-            <AirlineLogo iata={airline_iata} size={32} />
+            <AirlineLogo iata={airline_iata || (flight_number ? flight_number.substring(0, 2) : "")} size={32} />
           </div>
           <div className="min-w-0">
-            {isEditable ? (
+            {isAllEditable ? (
               <div className="flex items-center gap-1.5 min-w-0 relative" ref={airlineRef}>
                 <div className="relative">
                   <input
@@ -373,7 +389,7 @@ export default function BoardingPassCard({ flight, compact = false, footerRight 
       <div className="px-6 pt-5 pb-4 flex items-end justify-between gap-3">
         <div className="flex-shrink-0 relative" ref={depRef}>
           <p className={`text-[10px] uppercase tracking-[0.16em] font-semibold ${brand.textMuted}`}>Leaving</p>
-          {isEditable ? (
+          {isAllEditable ? (
             <div className="relative mt-1.5">
               <input
                 type="text"
@@ -424,7 +440,7 @@ export default function BoardingPassCard({ flight, compact = false, footerRight 
 
         <div className="text-right flex-shrink-0 relative" ref={arrRef}>
           <p className={`text-[10px] uppercase tracking-[0.16em] font-semibold ${brand.textMuted}`}>Landing</p>
-          {isEditable ? (
+          {isAllEditable ? (
             <div className="relative mt-1.5 flex justify-end">
               <input
                 type="text"
@@ -515,7 +531,7 @@ export default function BoardingPassCard({ flight, compact = false, footerRight 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 flex-1">
               <div>
                 <p className={`uppercase tracking-wider text-[9px] font-semibold flex items-center gap-1 ${brand.textMuted}`}><UserRound size={10} /> Passenger</p>
-                {isEditable ? (
+                {isAllEditable ? (
                   <input
                     type="text"
                     value={passenger_name || ""}
@@ -529,7 +545,7 @@ export default function BoardingPassCard({ flight, compact = false, footerRight 
               </div>
               <div>
                 <p className={`uppercase tracking-wider text-[9px] font-semibold ${brand.textMuted}`}>Seat</p>
-                {isEditable ? (
+                {isAllEditable ? (
                   <input
                     type="text"
                     value={seat_number || ""}
@@ -543,7 +559,7 @@ export default function BoardingPassCard({ flight, compact = false, footerRight 
               </div>
               <div>
                 <p className={`uppercase tracking-wider text-[9px] font-semibold flex items-center gap-1 ${brand.textMuted}`}><MapPin size={10} /> Terminal/Gate</p>
-                {isEditable ? (
+                {isAllEditable ? (
                   <div className="flex gap-1 mt-1 items-center">
                     <input
                       type="text"
@@ -569,7 +585,7 @@ export default function BoardingPassCard({ flight, compact = false, footerRight 
               </div>
               <div>
                 <p className={`uppercase tracking-wider text-[9px] font-semibold flex items-center gap-1 ${brand.textMuted}`}><Plane size={10} /> Aircraft</p>
-                {isEditable ? (
+                {isAllEditable ? (
                   <input
                     type="text"
                     value={aircraft_type || ""}
@@ -584,7 +600,7 @@ export default function BoardingPassCard({ flight, compact = false, footerRight 
             </div>
             
             <div className="flex items-center gap-2 flex-shrink-0">
-              {isEditable ? (
+              {isAllEditable ? (
                 <div className="flex flex-col gap-1 items-end">
                   <p className={`uppercase tracking-wider text-[9px] font-semibold ${brand.textMuted}`}>PNR</p>
                   <input

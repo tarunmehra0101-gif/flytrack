@@ -710,94 +710,50 @@ export function AnimatedManualEntryIcon({ size = 48 }) {
 }
 
 /**
- * FlightLoadingAnimation: An aerodynamic jet silhouette tilting and hovering with orange/yellow combustion flames, moving grid lines, and wind swirls.
+ * FlightLoadingAnimation: Sleek, minimalist pulsing aviation radar / plane.
  */
 export function FlightLoadingAnimation({ size = 110 }) {
   return (
-    <div className="relative flex flex-col items-center justify-center overflow-hidden" style={{ width: size * 1.5, height: size }}>
-      {/* Wind swirls/speed lines in the background */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        {[0, 1, 2].map((i) => (
-          <motion.div
-            key={i}
-            className="absolute h-[1px] bg-gradient-to-r from-transparent via-sky-400/40 to-transparent"
-            style={{
-              width: "50%",
-              top: `${25 + i * 25}%`,
-              left: "-50%",
-            }}
-            animate={{
-              left: ["100%", "-50%"],
-            }}
-            transition={{
-              repeat: Infinity,
-              duration: 1.2 + i * 0.3,
-              ease: "linear",
-              delay: i * 0.4,
-            }}
-          />
-        ))}
-      </div>
-
-      {/* Aerodynamic jet container */}
+    <div className="relative flex flex-col items-center justify-center" style={{ width: size, height: size }}>
+      {/* Expanding radar rings */}
       <motion.div
-        className="relative flex items-center justify-center"
-        style={{ width: size * 0.7, height: size * 0.7 }}
+        className="absolute rounded-full border border-sky-400/30"
+        style={{ width: "40%", height: "40%" }}
+        animate={{ scale: [1, 2.5], opacity: [0.8, 0] }}
+        transition={{ repeat: Infinity, duration: 2.5, ease: "easeOut" }}
+      />
+      <motion.div
+        className="absolute rounded-full border border-sky-400/30"
+        style={{ width: "40%", height: "40%" }}
+        animate={{ scale: [1, 2.5], opacity: [0.8, 0] }}
+        transition={{ repeat: Infinity, duration: 2.5, delay: 1.25, ease: "easeOut" }}
+      />
+      
+      {/* Sleek minimalist plane floating */}
+      <motion.svg
+        className="text-primary relative z-10 filter drop-shadow-[0_4px_12px_rgba(56,189,248,0.5)]"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ width: size * 0.45, height: size * 0.45 }}
         animate={{
           y: [-4, 4, -4],
-          rotate: [-3, 3, -3],
+          rotate: [-1, 2, -1],
         }}
         transition={{
           repeat: Infinity,
-          duration: 2.5,
+          duration: 3.5,
           ease: "easeInOut",
         }}
       >
-        {/* Glow behind jet */}
-        <div className="absolute w-12 h-12 bg-sky-400/25 blur-xl rounded-full" />
-
-        {/* Jet Silhouette */}
-        <svg
-          className="text-sky-400 filter drop-shadow-[0_8px_20px_rgba(56,189,248,0.4)]"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          stroke="currentColor"
-          strokeWidth="0.5"
-          style={{ width: "100%", height: "100%", transform: "rotate(-90deg)" }} // Rotated to fly forward (facing right)
-        >
-          <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5L21 16Z" />
-        </svg>
-
-        {/* Combustion engine flames */}
-        <div className="absolute left-[15%] top-[40%] flex flex-col gap-[6px] transform -translate-x-full rotate-[90deg] origin-right">
-          <motion.div
-            className="w-3 h-1 bg-gradient-to-r from-red-500 via-orange-400 to-yellow-300 rounded-full"
-            style={{ originX: 1 }}
-            animate={{
-              scaleX: [0.6, 1.4, 0.6],
-              opacity: [0.8, 1, 0.8],
-            }}
-            transition={{
-              repeat: Infinity,
-              duration: 0.15,
-              ease: "linear",
-            }}
-          />
-          <motion.div
-            className="w-3 h-1 bg-gradient-to-r from-red-500 via-orange-400 to-yellow-300 rounded-full"
-            style={{ originX: 1 }}
-            animate={{
-              scaleX: [1.4, 0.6, 1.4],
-              opacity: [1, 0.8, 1],
-            }}
-            transition={{
-              repeat: Infinity,
-              duration: 0.12,
-              ease: "linear",
-            }}
-          />
-        </div>
-      </motion.div>
+        <path d="M17.8 20.197a15.686 15.686 0 0 0 .8-5.197 3.5 3.5 0 0 0-7-0h-1.55a4.42 4.42 0 0 1-2.867-1.07l-3.36-2.8a1.272 1.272 0 0 1 0-2.22l3.36-2.8A4.42 4.42 0 0 1 10.05 5H11.6a3.5 3.5 0 0 0 7 0 15.686 15.686 0 0 0-.8 5.197" />
+        <path d="M3 12h18" />
+        <path d="m14 2 2 4" />
+        <path d="m14 22 2-4" />
+      </motion.svg>
       <span className="text-[10px] tracking-[0.3em] font-semibold text-sky-400/80 uppercase mt-2 select-none animate-pulse">
         Retrieving flight status...
       </span>
