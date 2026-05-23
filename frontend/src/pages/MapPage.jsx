@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Shell from "@/components/shell/Shell";
-import { Globe3D } from "@/components/ui/3d-globe";
 import MapLibreTravelMap from "@/components/MapLibreTravelMap";
 import ComponentErrorBoundary from "@/components/ComponentErrorBoundary";
 import { api } from "@/lib/api";
@@ -18,17 +17,6 @@ function MarkerColor(count, maxCount, isHome) {
   return "#f472b6";
 }
 
-const WebGLFallback = () => (
-  <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center text-muted-foreground z-10 bg-black/60 backdrop-blur-sm">
-    <div className="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mb-4">
-      <Globe2 size={32} />
-    </div>
-    <h3 className="text-lg font-bold text-white mb-2">Interactive Preview Unavailable</h3>
-    <p className="text-xs max-w-xs text-muted-foreground leading-relaxed">
-      It looks like WebGL or hardware acceleration is disabled in your browser. Enable it in your browser settings to see your interactive 3D travel map.
-    </p>
-  </div>
-);
 
 export default function MapPage() {
   const navigate = useNavigate();
@@ -108,26 +96,8 @@ export default function MapPage() {
           background: "radial-gradient(ellipse at center, rgba(10,15,30,0.8) 0%, #000 70%)",
         }} />
 
-        <ComponentErrorBoundary fallback={<WebGLFallback />}>
-          {mode === "globe" ? (
-            <Globe3D
-              markers={markers}
-              arcs={arcs}
-              onMarkerHover={setHovered}
-              onMarkerClick={setSelected}
-              config={{
-                autoRotateSpeed: 0.25,
-                enableZoom: true,
-                atmosphereColor: "#4da6ff",
-                atmosphereIntensity: 0.8,
-                bumpScale: 4,
-                minDistance: 2.5,
-                maxDistance: 10,
-              }}
-            />
-          ) : (
-            <MapLibreTravelMap mapData={mapData} selectedYear={year} />
-          )}
+        <ComponentErrorBoundary>
+          <MapLibreTravelMap mapData={mapData} selectedYear={year} mode={mode} />
         </ComponentErrorBoundary>
 
         {/* Top controls */}

@@ -3,7 +3,7 @@ import { ComposableMap, Geographies, Geography, Marker, Line, Graticule } from "
 
 const geoUrl = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
 
-export default function MapLibreTravelMap({ mapData, selectedYear }) {
+export default function MapLibreTravelMap({ mapData, selectedYear, mode = "globe" }) {
   const [selected, setSelected] = useState(null);
   const [rotation, setRotation] = useState([-78.9629, -22.5937, 0]);
   const [isDragging, setIsDragging] = useState(false);
@@ -63,13 +63,17 @@ export default function MapLibreTravelMap({ mapData, selectedYear }) {
 
   // Center on home airport on mount
   useEffect(() => {
-    const home = airports.find(a => a.is_home);
-    if (home) {
-      setRotation([-home.lng, -home.lat, 0]);
-    } else if (airports.length > 0) {
-      setRotation([-airports[0].lng, -airports[0].lat, 0]);
+    if (mode === "globe") {
+      const home = airports.find(a => a.is_home);
+      if (home) {
+        setRotation([-home.lng, -home.lat, 0]);
+      } else if (airports.length > 0) {
+        setRotation([-airports[0].lng, -airports[0].lat, 0]);
+      }
+    } else {
+      setRotation([0, 0, 0]);
     }
-  }, [airports]);
+  }, [airports, mode]);
 
   return (
     <div 
@@ -86,17 +90,18 @@ export default function MapLibreTravelMap({ mapData, selectedYear }) {
       </div>
 
       <ComposableMap
-        projection="geoOrthographic"
+        projection={mode === "globe" ? "geoOrthographic" : "geoEquirectangular"}
         projectionConfig={{
-          scale: zoom,
+          scale: mode === "globe" ? zoom : zoom * 0.7,
           rotate: rotation,
+          center: mode === "globe" ? [0, 0] : [0, 20]
         }}
         width={800}
         height={600}
         style={{ width: "100%", height: "100%", outline: "none" }}
       >
-        <circle cx={400} cy={300} r={zoom} fill="rgba(14, 165, 233, 0.05)" />
-        <Graticule stroke="rgba(255, 255, 255, 0.05)" strokeWidth={0.5} />
+        {mode === "globe" && <circle cx={400} cy={300} r={zoom} fill="rgba(14, 165, 233, 0.05)" />}
+        <Graticule stroke="rgba(255, 255, 255, 0.08)" strokeWidth={0.5} />
         
         <Geographies geography={geoUrl}>
           {({ geographies }) =>
@@ -104,13 +109,13 @@ export default function MapLibreTravelMap({ mapData, selectedYear }) {
               <Geography
                 key={geo.rsmKey}
                 geography={geo}
-                fill="#1f2937"
-                stroke="#374151"
+                fill="#2b3b55"
+                stroke="#1a253a"
                 strokeWidth={0.5}
                 style={{
                   default: { outline: "none" },
-                  hover: { fill: "#374151", outline: "none" },
-                  pressed: { fill: "#4b5563", outline: "none" },
+                  hover: { fill: "#3a4d6e", outline: "none" },
+                  pressed: { fill: "#4f658b", outline: "none" },
                 }}
               />
             ))

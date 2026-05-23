@@ -35,166 +35,32 @@ function cityLabel(iata, explicit) {
 }
 
 export const AIRLINE_BRANDS = {
-  "6E": {
-    name: "IndiGo",
-    bg: "bg-gradient-to-br from-[#0b3c8c] via-[#052863] to-[#02163b] border-[#0c3c84]/40 text-white",
-    textMuted: "text-blue-200/60",
-    textPrimary: "text-blue-100",
-    accentBadge: "bg-blue-500/20 text-blue-200 border-blue-400/30",
-    borderDashed: "border-blue-400/25",
-    inputBorder: "border-blue-300/40 focus:border-blue-200 focus:ring-1 focus:ring-blue-300/20",
-    inputText: "text-white placeholder:text-blue-300/40",
-  },
-  "AI": {
-    name: "Air India",
-    bg: "bg-gradient-to-br from-[#cf152c] via-[#a80e21] to-[#780410] border-[#cf142b]/40 text-white",
-    textMuted: "text-red-200/60",
-    textPrimary: "text-red-100",
-    accentBadge: "bg-white/20 text-red-100 border-white/30",
-    borderDashed: "border-red-400/25",
-    inputBorder: "border-red-300/40 focus:border-red-200 focus:ring-1 focus:ring-red-300/20",
-    inputText: "text-white placeholder:text-red-300/40",
-  },
-  "EK": {
-    name: "Emirates",
-    bg: "bg-gradient-to-br from-[#b51221] via-[#8c030e] to-[#590107] border-[#a60c19]/40 text-white",
-    textMuted: "text-rose-200/60",
-    textPrimary: "text-amber-300",
-    accentBadge: "bg-amber-500/25 text-amber-300 border-amber-500/40",
-    borderDashed: "border-rose-400/25",
-    inputBorder: "border-rose-300/40 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/20",
-    inputText: "text-white placeholder:text-rose-300/40",
-  },
-  "SQ": {
-    name: "Singapore Airlines",
-    bg: "bg-gradient-to-br from-[#0c2340] via-[#07172b] to-[#040e1b] border-[#0c2340]/40 text-white",
-    textMuted: "text-slate-300/60",
-    textPrimary: "text-amber-400",
-    accentBadge: "bg-amber-500/20 text-amber-400 border-amber-500/40",
-    borderDashed: "border-slate-500/25",
-    inputBorder: "border-slate-400/40 focus:border-amber-400 focus:ring-1 focus:ring-amber-400/20",
-    inputText: "text-white placeholder:text-slate-400/40",
-  },
-  "QP": {
-    name: "Akasa Air",
-    bg: "bg-gradient-to-br from-[#ff6600] via-[#cc5200] to-[#3a0647] border-[#ff6600]/40 text-white",
-    textMuted: "text-orange-200/65",
-    textPrimary: "text-orange-100",
-    accentBadge: "bg-purple-500/25 text-purple-200 border-purple-400/30",
-    borderDashed: "border-orange-400/25",
-    inputBorder: "border-orange-300/40 focus:border-orange-200 focus:ring-1 focus:ring-orange-300/20",
-    inputText: "text-white placeholder:text-orange-300/40",
-  },
-  "QR": {
-    name: "Qatar Airways",
-    bg: "bg-gradient-to-br from-[#5c0632] via-[#420222] to-[#240011] border-[#5c0632]/40 text-white",
-    textMuted: "text-rose-200/60",
-    textPrimary: "text-amber-400",
-    accentBadge: "bg-amber-500/25 text-amber-400 border-amber-500/40",
-    borderDashed: "border-rose-400/25",
-    inputBorder: "border-rose-300/40 focus:border-amber-400 focus:ring-1 focus:ring-amber-400/20",
-    inputText: "text-white placeholder:text-rose-300/40",
-  },
-  "SG": {
-    name: "SpiceJet",
-    bg: "bg-gradient-to-br from-[#ff6600] via-[#d63400] to-[#a10000] border-[#f25c05]/40 text-white",
-    textMuted: "text-amber-200/60",
-    textPrimary: "text-yellow-300",
-    accentBadge: "bg-white/20 text-white border-white/30",
-    borderDashed: "border-amber-400/25",
-    inputBorder: "border-amber-300/40 focus:border-yellow-300 focus:ring-1 focus:ring-yellow-300/20",
-    inputText: "text-white placeholder:text-amber-300/40",
-  },
-  "UK": {
-    name: "Vistara",
-    bg: "bg-gradient-to-br from-[#470f33] via-[#330522] to-[#1c0111] border-[#421331]/40 text-white",
-    textMuted: "text-fuchsia-200/60",
-    textPrimary: "text-amber-300",
-    accentBadge: "bg-amber-500/20 text-amber-300 border-amber-500/40",
-    borderDashed: "border-fuchsia-400/25",
-    inputBorder: "border-fuchsia-300/40 focus:border-amber-300 focus:ring-1 focus:ring-amber-300/20",
-    inputText: "text-white placeholder:text-fuchsia-300/40",
-  },
-  "EY": {
-    name: "Etihad",
-    bg: "bg-gradient-to-br from-[#1c160e] via-[#140f09] to-[#0f0a05] border-[#c5a059]/40 text-white",
-    textMuted: "text-amber-200/50",
-    textPrimary: "text-[#c5a059]",
-    accentBadge: "bg-[#c5a059]/20 text-[#c5a059] border-[#c5a059]/30",
-    borderDashed: "border-[#c5a059]/20",
-    inputBorder: "border-[#c5a059]/40 focus:border-[#c5a059] focus:ring-1 focus:ring-[#c5a059]/20",
-    inputText: "text-white placeholder:text-[#c5a059]/40",
-  },
-  "LH": {
-    name: "Lufthansa",
-    bg: "bg-gradient-to-br from-[#071c35] via-[#041326] to-[#030e1c] border-[#ffcc00]/40 text-white",
-    textMuted: "text-blue-200/60",
-    textPrimary: "text-[#ffcc00]",
-    accentBadge: "bg-[#ffcc00]/20 text-[#ffcc00] border-[#ffcc00]/30",
-    borderDashed: "border-blue-400/20",
-    inputBorder: "border-blue-300/40 focus:border-[#ffcc00] focus:ring-1 focus:ring-[#ffcc00]/20",
-    inputText: "text-white placeholder:text-blue-300/40",
-  },
-  "BA": {
-    name: "British Airways",
-    bg: "bg-gradient-to-br from-[#0b2265] via-[#051138] to-[#00051d] border-[#eb1c24]/40 text-white",
-    textMuted: "text-blue-200/60",
-    textPrimary: "text-[#eb1c24]",
-    accentBadge: "bg-[#eb1c24]/20 text-[#eb1c24] border-[#eb1c24]/30",
-    borderDashed: "border-blue-400/20",
-    inputBorder: "border-blue-300/40 focus:border-[#eb1c24] focus:ring-1 focus:ring-[#eb1c24]/20",
-    inputText: "text-white placeholder:text-blue-300/40",
-  },
-  "AA": {
-    name: "American Airlines",
-    bg: "bg-gradient-to-br from-[#1e293b] via-[#0f172a] to-[#020617] border-slate-500/40 text-white",
-    textMuted: "text-slate-300/60",
-    textPrimary: "text-sky-300",
-    accentBadge: "bg-sky-500/20 text-sky-200 border-sky-400/30",
-    borderDashed: "border-slate-500/20",
-    inputBorder: "border-slate-400/40 focus:border-sky-300 focus:ring-1 focus:ring-sky-300/20",
-    inputText: "text-white placeholder:text-slate-400/40",
-  },
-  "DL": {
-    name: "Delta Air Lines",
-    bg: "bg-gradient-to-br from-[#0a1e36] via-[#05101e] to-[#010305] border-[#e01933]/40 text-white",
-    textMuted: "text-blue-200/60",
-    textPrimary: "text-[#e01933]",
-    accentBadge: "bg-[#e01933]/25 text-[#f18c99] border-[#e01933]/30",
-    borderDashed: "border-blue-400/20",
-    inputBorder: "border-blue-300/40 focus:border-[#e01933] focus:ring-1 focus:ring-[#e01933]/20",
-    inputText: "text-white placeholder:text-blue-300/40",
-  },
-  "UA": {
-    name: "United Airlines",
-    bg: "bg-gradient-to-br from-[#002244] via-[#001428] to-[#000810] border-[#ffc72c]/40 text-white",
-    textMuted: "text-blue-200/60",
-    textPrimary: "text-[#ffc72c]",
-    accentBadge: "bg-[#ffc72c]/20 text-[#ffc72c] border-[#ffc72c]/30",
-    borderDashed: "border-blue-400/20",
-    inputBorder: "border-blue-300/40 focus:border-[#ffc72c] focus:ring-1 focus:ring-[#ffc72c]/20",
-    inputText: "text-white placeholder:text-blue-300/40",
-  },
-  "I5": {
-    name: "AirAsia India",
-    bg: "bg-gradient-to-br from-[#e01a22] via-[#b30e15] to-[#730206] border-[#e01a22]/40 text-white",
-    textMuted: "text-red-200/65",
-    textPrimary: "text-yellow-300",
-    accentBadge: "bg-yellow-500/25 text-yellow-300 border-yellow-500/40",
-    borderDashed: "border-red-400/25",
-    inputBorder: "border-red-300/40 focus:border-yellow-300 focus:ring-1 focus:ring-yellow-300/20",
-    inputText: "text-white placeholder:text-red-300/40",
-  },
-  "IX": {
-    name: "Air India Express",
-    bg: "bg-gradient-to-br from-[#ff5a00] via-[#c74100] to-[#802200] border-[#ff5a00]/40 text-white",
-    textMuted: "text-orange-200/65",
-    textPrimary: "text-yellow-300",
-    accentBadge: "bg-yellow-500/25 text-yellow-300 border-yellow-500/40",
-    borderDashed: "border-orange-400/25",
-    inputBorder: "border-orange-300/40 focus:border-yellow-300 focus:ring-1 focus:ring-yellow-300/20",
-    inputText: "text-white placeholder:text-orange-300/40",
-  }
+  // India
+  "6E": { name: "IndiGo", bg: "bg-gradient-to-br from-blue-900 via-blue-950 to-slate-950 border-blue-900/40 text-white shadow-blue-900/20", textMuted: "text-blue-200/60" },
+  "AI": { name: "Air India", bg: "bg-gradient-to-br from-red-600 via-red-800 to-red-950 border-red-600/40 text-white shadow-red-900/20", textMuted: "text-red-200/60" },
+  "IX": { name: "Air India Express", bg: "bg-gradient-to-br from-orange-500 via-orange-700 to-orange-950 border-orange-500/40 text-white shadow-orange-900/20", textMuted: "text-orange-200/60" },
+  "I5": { name: "Air India Express", bg: "bg-gradient-to-br from-orange-500 via-orange-700 to-orange-950 border-orange-500/40 text-white shadow-orange-900/20", textMuted: "text-orange-200/60" },
+  "QP": { name: "Akasa Air", bg: "bg-gradient-to-br from-orange-500 via-orange-700 to-fuchsia-950 border-orange-500/40 text-white shadow-orange-900/20", textMuted: "text-orange-200/60" },
+  "SG": { name: "SpiceJet", bg: "bg-gradient-to-br from-orange-500 via-red-700 to-red-950 border-orange-500/40 text-white shadow-orange-900/20", textMuted: "text-orange-200/60" },
+  "UK": { name: "Vistara", bg: "bg-gradient-to-br from-fuchsia-900 via-fuchsia-950 to-slate-950 border-fuchsia-900/40 text-white shadow-fuchsia-900/20", textMuted: "text-fuchsia-200/60" },
+  
+  // Middle East
+  "EK": { name: "Emirates", bg: "bg-gradient-to-br from-rose-700 via-rose-900 to-slate-950 border-rose-700/40 text-white shadow-rose-900/20", textMuted: "text-rose-200/60" },
+  "QR": { name: "Qatar Airways", bg: "bg-gradient-to-br from-rose-800 via-rose-950 to-slate-950 border-rose-800/40 text-white shadow-rose-900/20", textMuted: "text-rose-200/60" },
+  "EY": { name: "Etihad Airways", bg: "bg-gradient-to-br from-amber-900 via-stone-900 to-stone-950 border-amber-900/40 text-white shadow-amber-900/20", textMuted: "text-amber-200/60" },
+  
+  // Asia
+  "SQ": { name: "Singapore Airlines", bg: "bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 border-slate-800/40 text-white shadow-slate-900/20", textMuted: "text-slate-300/60" },
+  "AK": { name: "AirAsia", bg: "bg-gradient-to-br from-red-600 via-red-800 to-red-950 border-red-600/40 text-white shadow-red-900/20", textMuted: "text-red-200/60" },
+  
+  // Europe
+  "LH": { name: "Lufthansa", bg: "bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 border-slate-800/40 text-white shadow-slate-900/20", textMuted: "text-slate-300/60" },
+  "BA": { name: "British Airways", bg: "bg-gradient-to-br from-blue-800 via-blue-950 to-slate-950 border-blue-800/40 text-white shadow-blue-900/20", textMuted: "text-blue-200/60" },
+  
+  // US
+  "AA": { name: "American Airlines", bg: "bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 border-slate-800/40 text-white shadow-slate-900/20", textMuted: "text-slate-300/60" },
+  "DL": { name: "Delta Air Lines", bg: "bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 border-slate-800/40 text-white shadow-slate-900/20", textMuted: "text-slate-300/60" },
+  "UA": { name: "United Airlines", bg: "bg-gradient-to-br from-blue-900 via-slate-900 to-slate-950 border-blue-900/40 text-white shadow-blue-900/20", textMuted: "text-blue-200/60" },
 };
 
 const getAirportSuggestions = (query) => {
@@ -325,7 +191,7 @@ export default function BoardingPassCard({ flight, compact = false, footerRight 
       data-testid="boarding-pass-card"
     >
       {/* Flight header */}
-      <div className={`px-6 pt-5 pb-3 flex items-start justify-between gap-3 border-b border-dashed ${brand.borderDashed}`}>
+      <div className={`px-6 pt-5 pb-3 flex items-start justify-between gap-3 border-b border-dashed ${brand.borderDashed || "border-white/10"}`}>
         <div className="flex items-center gap-3 min-w-0">
           <div className="bg-white/95 p-1 rounded-xl shadow-sm flex items-center justify-center flex-shrink-0">
             <AirlineLogo iata={airline_iata || (flight_number ? flight_number.substring(0, 2) : "")} size={32} />
@@ -359,7 +225,7 @@ export default function BoardingPassCard({ flight, compact = false, footerRight 
                           }}
                           className="w-full px-3 py-2 text-left hover:bg-white/10 transition-colors cursor-pointer text-white flex items-center justify-between text-xs"
                         >
-                          <span className="font-bold text-[#c5a059]">{item.iata}</span>
+                          <span className="font-bold text-amber-500">{item.iata}</span>
                           <span className="text-white/60 text-[10px] truncate max-w-[120px]">{item.name}</span>
                         </button>
                       ))}
@@ -416,7 +282,7 @@ export default function BoardingPassCard({ flight, compact = false, footerRight 
                       }}
                       className="w-full px-3 py-2 text-left hover:bg-white/10 transition-colors cursor-pointer text-white flex items-center justify-between text-xs"
                     >
-                      <span className="font-bold text-[#c5a059]">{item.iata}</span>
+                      <span className="font-bold text-amber-500">{item.iata}</span>
                       <span className="text-white/60 text-[10px] truncate max-w-[150px]">{item.city}, {item.country}</span>
                     </button>
                   ))}
@@ -467,7 +333,7 @@ export default function BoardingPassCard({ flight, compact = false, footerRight 
                       }}
                       className="w-full px-3 py-2 text-left hover:bg-white/10 transition-colors cursor-pointer text-white flex items-center justify-between text-xs"
                     >
-                      <span className="font-bold text-[#c5a059]">{item.iata}</span>
+                      <span className="font-bold text-amber-500">{item.iata}</span>
                       <span className="text-white/60 text-[10px] truncate max-w-[150px]">{item.city}, {item.country}</span>
                     </button>
                   ))}
@@ -527,8 +393,8 @@ export default function BoardingPassCard({ flight, compact = false, footerRight 
           </div>
 
           {/* Passenger details footer inside card */}
-          <div className="px-6 pb-5 pt-4 flex items-center justify-between gap-3 text-[11px]">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 flex-1">
+          <div className="px-6 pb-5 pt-4 flex flex-col md:flex-row md:items-center justify-between gap-4 text-[11px]">
+            <div className={`grid ${isAllEditable ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" : "grid-cols-2 lg:grid-cols-4 gap-3"} flex-1`}>
               <div>
                 <p className={`uppercase tracking-wider text-[9px] font-semibold flex items-center gap-1 ${brand.textMuted}`}><UserRound size={10} /> Passenger</p>
                 {isAllEditable ? (
