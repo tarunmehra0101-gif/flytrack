@@ -43,8 +43,23 @@ function fmtDuration(minutes, type, isHome, city) {
 function FlightStub({ flight, onClick }) {
   const { airline_iata, airline_name, flight_number, departure_airport_iata, arrival_airport_iata, departure_time_local, departure_time_utc, flight_date, seat_number } = flight;
   
-  const brand = AIRLINE_BRANDS[String(airline_iata).toUpperCase()] || {
-    bg: "bg-gradient-to-br from-white/10 via-white/5 to-transparent backdrop-blur-xl border border-white/20 text-white shadow-lg",
+  let matchedBrand = AIRLINE_BRANDS[String(airline_iata).toUpperCase()];
+  if (!matchedBrand && airline_name) {
+    matchedBrand = Object.values(AIRLINE_BRANDS).find(b => 
+      b.name.toLowerCase() === airline_name.toLowerCase() || 
+      airline_name.toLowerCase().includes(b.name.toLowerCase())
+    );
+  }
+  if (!matchedBrand && flight_number) {
+    const prefix = String(flight_number).substring(0, 2).toUpperCase();
+    if (AIRLINE_BRANDS[prefix]) {
+      matchedBrand = AIRLINE_BRANDS[prefix];
+    }
+  }
+
+  const brand = matchedBrand || {
+    name: airline_name,
+    color: "#38bdf8",
     textMuted: "text-white/50",
     textPrimary: "text-white",
     accentBadge: "bg-white/15 text-white border-white/20",
@@ -68,34 +83,39 @@ function FlightStub({ flight, onClick }) {
     } catch { return ""; }
   })();
 
+  const brandColor = brand.color || "#38bdf8";
+
   const stubStyle = {
-    background: brand.from && brand.to 
-      ? `linear-gradient(135deg, ${brand.from}, ${brand.to})` 
-      : undefined,
-    borderColor: brand.borderHex || undefined,
-    boxShadow: brand.from ? `0 8px 24px -8px ${brand.from}aa` : undefined,
+    background: `
+      linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.05) 45%, rgba(255, 255, 255, 0.12) 50%, rgba(255, 255, 255, 0.05) 55%, transparent 60%),
+      radial-gradient(circle at 90% 20%, ${brandColor}22, transparent 55%),
+      linear-gradient(135deg, rgba(15, 22, 38, 0.85) 0%, rgba(6, 9, 15, 0.95) 100%)
+    `,
+    borderColor: brand.borderHex || `${brandColor}33`,
+    boxShadow: `0 12px 24px -10px rgba(0, 0, 0, 0.5), 0 0 20px -5px ${brandColor}12`,
+    backdropFilter: "blur(20px)",
   };
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`w-full h-[76px] ${!brand.from ? brand.bg : "border text-white"} rounded-[20px] p-3 flex items-center justify-between relative overflow-hidden transition-all duration-300 hover:scale-[1.015] active:scale-[0.985] shadow-lg`}
+      className="w-full h-[76px] border text-white rounded-[20px] p-3 flex items-center justify-between relative overflow-hidden transition-all duration-300 hover:scale-[1.015] active:scale-[0.985] shadow-lg"
       style={stubStyle}
     >
       {/* Brand logo & flight ID */}
-      <div className="flex items-center gap-2.5 min-w-0">
+      <div className="flex items-center gap-2.5 min-w-0 relative z-10">
         <div className="bg-white/95 p-1 rounded-lg flex items-center justify-center flex-shrink-0 w-8 h-8">
-          <AirlineLogo iata={airline_iata} size={24} />
+          <AirlineLogo iata={airline_iata || (flight_number ? flight_number.substring(0, 2) : "")} size={24} />
         </div>
         <div className="min-w-0">
-          <p className={`text-[10px] uppercase tracking-wider font-semibold ${brand.from ? brand.textMuted : "opacity-75"}`}>{dateStr} · {depTimeStr}</p>
+          <p className={`text-[10px] uppercase tracking-wider font-semibold ${brand.textMuted || "opacity-75"}`}>{dateStr} · {depTimeStr}</p>
           <p className="text-sm font-bold truncate mt-0.5">{airline_name || brand.name || airline_iata} {flight_number || ""}</p>
         </div>
       </div>
       
       {/* Route illustration */}
-      <div className="flex items-center gap-2 px-2 flex-1 justify-center max-w-[150px]">
+      <div className="flex items-center gap-2 px-2 flex-1 justify-center max-w-[150px] relative z-10">
         <span className="font-mono text-sm font-extrabold tracking-wider">{departure_airport_iata}</span>
         <div className="flex-1 flex flex-col items-center min-w-[30px]">
           <Plane size={10} className="transform rotate-90 opacity-80" />
@@ -105,7 +125,7 @@ function FlightStub({ flight, onClick }) {
       </div>
 
       {/* Seat Badge & expand indicator */}
-      <div className="flex items-center gap-2 flex-shrink-0">
+      <div className="flex items-center gap-2 flex-shrink-0 relative z-10">
         {seat_number && (
           <span className={`px-2 py-0.5 rounded-full border text-[9px] font-mono tracking-wider ${brand.accentBadge}`}>
             {seat_number}

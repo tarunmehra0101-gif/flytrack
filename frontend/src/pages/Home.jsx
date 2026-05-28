@@ -14,7 +14,7 @@ import CountUp from "@/components/CountUp";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import MapLibreTravelMap from "@/components/MapLibreTravelMap";
+import LeafletTravelMap from "@/components/LeafletTravelMap";
 import ComponentErrorBoundary from "@/components/ComponentErrorBoundary";
 import {
   AnimatedGlobeIcon,
@@ -523,7 +523,7 @@ export default function Home() {
               <div className="relative h-48 overflow-hidden rounded-t-2xl pointer-events-none">
                 <div className="absolute inset-0 w-full h-full">
                   <ComponentErrorBoundary>
-                    <MapLibreTravelMap
+                    <LeafletTravelMap
                       mapData={{ routes: mapRoutes.routes, airport_markers: mapRoutes.markers }}
                       selectedYear={selectedYear === "all" ? "All" : selectedYear}
                     />
