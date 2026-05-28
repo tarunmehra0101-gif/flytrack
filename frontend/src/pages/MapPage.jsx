@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Shell from "@/components/shell/Shell";
 import MapLibreTravelMap from "@/components/MapLibreTravelMap";
+import LeafletTravelMap from "@/components/LeafletTravelMap";
 import ComponentErrorBoundary from "@/components/ComponentErrorBoundary";
 import { api } from "@/lib/api";
 import { Globe2, Building2, Home as HomeIcon, Plane, Play, Map } from "lucide-react";
@@ -97,7 +98,11 @@ export default function MapPage() {
         }} />
 
         <ComponentErrorBoundary>
-          <MapLibreTravelMap mapData={mapData} selectedYear={year} mode={mode} />
+          {mode === "globe" ? (
+            <MapLibreTravelMap mapData={mapData} selectedYear={year} mode={mode} />
+          ) : (
+            <LeafletTravelMap mapData={mapData} selectedYear={year} />
+          )}
         </ComponentErrorBoundary>
 
         {/* Top controls */}
