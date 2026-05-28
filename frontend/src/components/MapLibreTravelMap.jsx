@@ -84,9 +84,9 @@ export default function MapLibreTravelMap({ mapData, selectedYear, mode = "globe
       style={{ cursor: isDragging ? "grabbing" : "grab" }}
       data-testid="react-simple-maps-container"
     >
-      <div className="absolute top-4 right-4 z-10 flex flex-col gap-2 bg-black/40 backdrop-blur-md rounded-lg p-1 border border-white/10 pointer-events-auto">
-        <button className="w-8 h-8 rounded bg-white/5 hover:bg-white/20 text-white flex items-center justify-center font-bold text-lg" onClick={() => setZoom(z => Math.min(1000, z + 50))}>+</button>
-        <button className="w-8 h-8 rounded bg-white/5 hover:bg-white/20 text-white flex items-center justify-center font-bold text-lg" onClick={() => setZoom(z => Math.max(100, z - 50))}>-</button>
+      <div className="absolute right-4 top-[130px] z-30 flex flex-col gap-2 bg-black/55 backdrop-blur-md rounded-xl p-1.5 border border-white/15 pointer-events-auto shadow-lg">
+        <button className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 active:scale-95 text-white flex items-center justify-center font-bold text-lg transition-all" onClick={() => setZoom(z => Math.min(1000, z + 50))}>+</button>
+        <button className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 active:scale-95 text-white flex items-center justify-center font-bold text-lg transition-all" onClick={() => setZoom(z => Math.max(100, z - 50))}>-</button>
       </div>
 
       <ComposableMap
@@ -100,8 +100,8 @@ export default function MapLibreTravelMap({ mapData, selectedYear, mode = "globe
         height={600}
         style={{ width: "100%", height: "100%", outline: "none" }}
       >
-        {mode === "globe" && <circle cx={400} cy={300} r={zoom} fill="rgba(14, 165, 233, 0.05)" />}
-        <Graticule stroke="rgba(255, 255, 255, 0.08)" strokeWidth={0.5} />
+        {mode === "globe" && <circle cx={400} cy={300} r={zoom} fill="#1a3a5c" />}
+        <Graticule stroke="rgba(100, 180, 255, 0.12)" strokeWidth={0.5} />
         
         <Geographies geography={geoUrl}>
           {({ geographies }) =>
@@ -109,13 +109,13 @@ export default function MapLibreTravelMap({ mapData, selectedYear, mode = "globe
               <Geography
                 key={geo.rsmKey}
                 geography={geo}
-                fill="#2b3b55"
-                stroke="#1a253a"
+                fill="#4a8c5c"
+                stroke="#3d7a4a"
                 strokeWidth={0.5}
                 style={{
                   default: { outline: "none" },
-                  hover: { fill: "#3a4d6e", outline: "none" },
-                  pressed: { fill: "#4f658b", outline: "none" },
+                  hover: { fill: "#5da86e", outline: "none" },
+                  pressed: { fill: "#6ebc7f", outline: "none" },
                 }}
               />
             ))
@@ -127,10 +127,10 @@ export default function MapLibreTravelMap({ mapData, selectedYear, mode = "globe
             key={`line-${i}`}
             from={[r.from.lng, r.from.lat]}
             to={[r.to.lng, r.to.lat]}
-            stroke="#67e8f9"
-            strokeWidth={Math.max(1, Math.min(3, r.count * 0.6))}
+            stroke="#ff6b35"
+            strokeWidth={Math.max(1.5, Math.min(4, (r.count || 1) * 0.7))}
             strokeLinecap="round"
-            className="opacity-60 hover:opacity-100 transition-opacity"
+            className="opacity-80 hover:opacity-100 transition-opacity"
             onClick={() => setSelected({ type: "route", ...r })}
             style={{ cursor: "pointer", default: { outline: "none" }, hover: { outline: "none" } }}
           />
@@ -143,12 +143,21 @@ export default function MapLibreTravelMap({ mapData, selectedYear, mode = "globe
             onClick={() => setSelected({ type: "airport", ...a })}
             style={{ cursor: "pointer", default: { outline: "none" }, hover: { outline: "none" } }}
           >
+            {a.is_home && (
+              <circle
+                r={10}
+                fill="none"
+                stroke="#10b981"
+                strokeWidth={1.5}
+                className="animate-pulse"
+              />
+            )}
             <circle 
-              r={a.is_home ? 5 : Math.max(2.5, Math.min(6, 2 + (a.count || 0) * 0.4))} 
-              fill={a.is_home ? "#10b981" : "#38bdf8"} 
+              r={a.is_home ? 6 : Math.max(3.5, Math.min(7, 3 + (a.count || 0) * 0.4))} 
+              fill={a.is_home ? "#10b981" : "#f59e0b"} 
               stroke="#ffffff" 
-              strokeWidth={0.5} 
-              className="opacity-90 hover:opacity-100 hover:scale-125 transition-all" 
+              strokeWidth={1} 
+              className="opacity-95 hover:opacity-100 hover:scale-125 transition-all" 
             />
           </Marker>
         ))}

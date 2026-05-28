@@ -54,7 +54,40 @@ function MapBounds({ airports }) {
   return null;
 }
 
+function LeafletControls({ mapStyle, setMapStyle }) {
+  const map = useMap();
+  return (
+    <>
+      <div className="absolute right-4 top-[130px] z-[1000] flex flex-col gap-2 bg-black/55 backdrop-blur-md rounded-xl p-1.5 border border-white/15 pointer-events-auto shadow-lg">
+        <button 
+          className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 active:scale-95 text-white flex items-center justify-center font-bold text-lg transition-all" 
+          onClick={() => map.zoomIn()}
+        >
+          +
+        </button>
+        <button 
+          className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 active:scale-95 text-white flex items-center justify-center font-bold text-lg transition-all" 
+          onClick={() => map.zoomOut()}
+        >
+          -
+        </button>
+      </div>
+
+      <div className="absolute right-4 top-[220px] z-[1000] pointer-events-auto">
+        <button 
+          onClick={() => setMapStyle(prev => prev === 'street' ? 'satellite' : 'street')}
+          className="px-3 py-2 rounded-xl bg-black/55 hover:bg-black/75 border border-white/15 text-white backdrop-blur-md flex items-center gap-1.5 shadow-lg text-[10px] font-bold uppercase tracking-wider transition-all"
+        >
+          {mapStyle === 'street' ? '🛰️ Satellite' : '🗺️ Map'}
+        </button>
+      </div>
+    </>
+  );
+}
+
 export default function LeafletTravelMap({ mapData, selectedYear }) {
+  const [mapStyle, setMapStyle] = React.useState('satellite');
+
   // Extract and filter valid coordinates
   const airports = useMemo(() => {
     return (mapData?.airport_markers || []).filter(a => a.lat != null && a.lng != null);
@@ -75,15 +108,25 @@ export default function LeafletTravelMap({ mapData, selectedYear }) {
         zoom={2} 
         style={{ height: '100%', width: '100%', zIndex: 1 }}
         scrollWheelZoom={true}
+        zoomControl={false}
       >
-        {/* Colorful OpenStreetMap Tiles */}
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+        {mapStyle === 'satellite' ? (
+          <TileLayer
+            attribution='&copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+          />
+        ) : (
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+        )}
         
         {/* Auto-fit map bounds */}
         <MapBounds airports={airports} />
+
+        {/* Custom zoom & style controls */}
+        <LeafletControls mapStyle={mapStyle} setMapStyle={setMapStyle} />
 
         {/* Flight Routes */}
         {routes.map((r, i) => (
@@ -94,10 +137,11 @@ export default function LeafletTravelMap({ mapData, selectedYear }) {
               [r.to.lat, r.to.lng]
             ]}
             pathOptions={{ 
-              color: '#3b82f6', // Blue-500
-              weight: Math.max(2, Math.min(6, r.count || 2)), 
-              opacity: 0.6,
-              dashArray: '5, 10'
+              color: '#ff6b35', 
+              weight: Math.max(3, Math.min(8, (r.count || 1) * 1.2)), 
+              opacity: 0.85,
+              dashArray: '10, 10',
+              className: 'leaflet-flight-path'
             }}
           >
             <Popup className="tl-leaflet-popup">
@@ -160,6 +204,15 @@ export default function LeafletTravelMap({ mapData, selectedYear }) {
         }
         .leaflet-container a.leaflet-popup-close-button:hover {
           color: #475569;
+        }
+        @keyframes leaflet-dash {
+          to {
+            stroke-dashoffset: -40;
+          }
+        }
+        .leaflet-flight-path {
+          stroke-dasharray: 10, 10;
+          animation: leaflet-dash 1.5s linear infinite;
         }
       `}} />
     </div>

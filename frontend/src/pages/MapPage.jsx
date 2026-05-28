@@ -91,10 +91,10 @@ export default function MapPage() {
 
   return (
     <Shell title="Your world" contentClassName="!overflow-hidden !flex !flex-col">
-      <div className="relative flex-1 h-full w-full bg-black" data-testid="map-page">
+      <div className="relative flex-1 h-full w-full bg-[#0a1628]" data-testid="map-page">
         {/* Starfield */}
         <div className="absolute inset-0 pointer-events-none" style={{
-          background: "radial-gradient(ellipse at center, rgba(10,15,30,0.8) 0%, #000 70%)",
+          background: "radial-gradient(ellipse at center, rgba(16,37,68,0.8) 0%, #060d1b 70%)",
         }} />
 
         <ComponentErrorBoundary>

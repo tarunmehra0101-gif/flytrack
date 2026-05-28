@@ -568,10 +568,8 @@ body {
 .tl-btn-primary:active { transform: scale(0.98); box-shadow: none; }
 .tl-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
 
-/* Leaflet dark tweaks */
+/* Leaflet tweaks */
 .leaflet-container { background: #060a14 !important; font-family: var(--font-sans) !important; }
-.leaflet-tile-pane { filter: brightness(0.9) invert(1) contrast(1) hue-rotate(200deg) saturate(0.35); }
-.dark .leaflet-tile-pane { filter: brightness(0.95) invert(1) contrast(1.05) hue-rotate(200deg) saturate(0.3); }
 .leaflet-control-attribution { background: hsl(var(--background) / 0.7) !important; color: hsl(var(--muted-foreground)) !important; border-radius: 4px; padding: 2px 6px !important; font-size: 10px !important; }
 .leaflet-control-attribution a { color: hsl(var(--primary)) !important; }
 .no-scrollbar { scrollbar-width: none; }

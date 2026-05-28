@@ -55,6 +55,8 @@ def _estimated_duration_min(seg: dict) -> int:
     km = _haversine_km((dep["lat"], dep["lng"]), (arr["lat"], arr["lng"]))
     if km <= 0:
         return 0
+    if km < 500:
+        return int(round(km / 600 * 60 + 15))
     return int(round(km / 800 * 60 + 20))
 
 
