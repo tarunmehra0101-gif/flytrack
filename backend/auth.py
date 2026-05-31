@@ -11,17 +11,20 @@ from typing import Optional
 from urllib.parse import urlencode
 
 import httpx
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Request, Depends
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
+from supabase import create_client, Client
 
 logger = logging.getLogger(__name__)
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
-SESSION_COOKIE_NAME = "session_token"
-OAUTH_STATE_COOKIE_NAME = "oauth_state"
-SESSION_TTL_DAYS = 7
+
+def get_supabase() -> Client:
+    supabase_url = _required_env("SUPABASE_URL")
+    supabase_key = _required_env("SUPABASE_SERVICE_ROLE_KEY")
+    return create_client(supabase_url, supabase_key)
 
 
 def _required_env(name: str) -> str:
@@ -96,94 +99,31 @@ async def exchange_google_code(code: str, redirect_uri: str) -> dict:
     }
 
 
-async def upsert_user(db, profile: dict) -> dict:
-    email = profile["email"].lower()
-    existing = await db.users.find_one({"email": email}, {"_id": 0})
-    now = datetime.now(timezone.utc).isoformat()
-    if existing:
-        await db.users.update_one(
-            {"email": email},
-            {"$set": {
-                "name": profile.get("name") or existing.get("name"),
-                "picture": profile.get("picture") or existing.get("picture"),
-                "google_sub": profile.get("google_sub") or existing.get("google_sub"),
-                "updated_at": now,
-            }},
-        )
-        return await db.users.find_one({"email": email}, {"_id": 0})
-    user_id = f"user_{uuid.uuid4().hex[:12]}"
-    doc = {
-        "user_id": user_id,
-        "email": email,
-        "name": profile.get("name"),
-        "picture": profile.get("picture"),
-        "google_sub": profile.get("google_sub"),
-        "created_at": now,
-        "updated_at": now,
-    }
-    await db.users.insert_one(doc)
-    # Ensure an empty profile row exists
-    await db.user_profiles.insert_one({
-        "user_id": user_id,
-        "preferred_name": (profile.get("name") or "").split(" ")[0],
-        "home_city_name": None,
-        "home_airport_iata": None,
-        "home_country_code": None,
-        "work_city_name": None,
-        "onboarding_completed": False,
-        "theme_preference": "dark",
-        "units_preference": "metric",
-        "created_at": now,
-        "updated_at": now,
-    })
-    return await db.users.find_one({"email": email}, {"_id": 0})
+async def upsert_user(profile: dict) -> dict:
+    # Deprecated: Frontend uses Supabase Auth directly now.
+    pass
 
-
-async def store_session(db, user_id: str, session_token: str) -> None:
-    expires_at = datetime.now(timezone.utc) + timedelta(days=SESSION_TTL_DAYS)
-    await db.user_sessions.insert_one({
-        "user_id": user_id,
-        "session_token": session_token,
-        "expires_at": expires_at.isoformat(),
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    })
-
+async def store_session(user_id: str, session_token: str) -> None:
+    # Deprecated: Frontend uses Supabase Auth directly now.
+    pass
 
 def _extract_token(request: Request) -> Optional[str]:
-    token = request.cookies.get(SESSION_COOKIE_NAME)
-    if token:
-        return token
     auth = request.headers.get("Authorization") or request.headers.get("authorization")
     if auth and auth.lower().startswith("bearer "):
         return auth.split(" ", 1)[1].strip()
     return None
 
-
-async def get_current_user(request: Request, db) -> dict:
+async def get_current_user(request: Request) -> dict:
     token = _extract_token(request)
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    session = await db.user_sessions.find_one({"session_token": token}, {"_id": 0})
-    if not session:
+    
+    supabase = get_supabase()
+    user_res = supabase.auth.get_user(token)
+    if not user_res or not user_res.user:
         raise HTTPException(status_code=401, detail="Invalid session")
-    expires_at = session.get("expires_at")
-    if isinstance(expires_at, str):
-        try:
-            expires_at_dt = datetime.fromisoformat(expires_at)
-        except ValueError:
-            raise HTTPException(status_code=401, detail="Invalid session expiry")
-    else:
-        expires_at_dt = expires_at
-    if expires_at_dt and expires_at_dt.tzinfo is None:
-        expires_at_dt = expires_at_dt.replace(tzinfo=timezone.utc)
-    if expires_at_dt and expires_at_dt < datetime.now(timezone.utc):
-        raise HTTPException(status_code=401, detail="Session expired")
-    user = await db.users.find_one({"user_id": session["user_id"]}, {"_id": 0})
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-    return user
+        
+    return {"user_id": user_res.user.id, "email": user_res.user.email}
 
-
-async def delete_session(db, token: str) -> None:
-    if token:
-        await db.user_sessions.delete_one({"session_token": token})
+async def delete_session(token: str) -> None:
+    pass

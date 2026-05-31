@@ -24,16 +24,14 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field
 
 from auth import (
-    OAUTH_STATE_COOKIE_NAME,
-    SESSION_COOKIE_NAME,
     build_google_auth_url,
     delete_session,
-    exchange_google_code,
     get_current_user,
     new_oauth_state,
     session_cookie_secure,
     store_session,
     upsert_user,
+    get_supabase,
 )
 from services.airports import AIRLINES, AIRPORTS, lookup_airline, lookup_airport, search_airlines, search_airports
 from services.analytics import (
@@ -53,9 +51,9 @@ from services.pdf_parser import parse_pdf_ticket
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
-mongo_url = os.environ["MONGO_URL"]
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ["DB_NAME"]]
+# MongoDB removed; using Supabase Postgres via get_supabase()
+from db_wrapper import SupabaseDBWrapper
+db = SupabaseDBWrapper(get_supabase())
 
 app = FastAPI(title="Travel Ledger API")
 api = APIRouter(prefix="/api")
@@ -130,7 +128,7 @@ class ManualFlightReq(BaseModel):
 # ---------- Helpers ----------
 
 async def _auth(request: Request) -> dict:
-    return await get_current_user(request, db)
+    return await get_current_user(request)
 
 
 def _canonical_hash(segment: dict) -> str:
@@ -156,7 +154,7 @@ def _normalize_from_bcbp_leg(leg: dict, user_id: str, artifact_id: str, confiden
     arr_meta = lookup_airport(arr_iata)
 
     return {
-        "id": f"pseg_{uuid.uuid4().hex[:12]}",
+        "id": str(uuid.uuid4()),
         "artifact_id": artifact_id,
         "user_id": user_id,
         "source_type": "boarding_pass_barcode",
@@ -262,90 +260,49 @@ def _segment_auto_confirmable(segment: dict) -> bool:
 
 
 async def _confirm_segment_doc(seg: dict, user_id: str, recompute: bool = True) -> tuple[dict, bool]:
-    existing_source = await db.confirmed_segments.find_one(
-        {"user_id": user_id, "source_parsed_segment_id": seg["id"]},
-        {"_id": 0},
-    )
-    if existing_source:
-        return existing_source, existing_source.get("status") == "duplicate"
+    supabase = get_supabase()
     canonical = _canonical_hash(seg)
-    existing_dup = await db.confirmed_segments.find_one(
-        {"user_id": user_id, "canonical_hash": canonical, "status": "confirmed"},
-        {"_id": 0},
-    )
+    
+    # Check if this exact hash already exists and is confirmed
+    res_dup = supabase.table("flights").select("*").eq("user_id", user_id).eq("canonical_hash", canonical).eq("status", "confirmed").execute()
+    existing_dup = res_dup.data[0] if res_dup.data else None
 
-    confirmed = _decorate_segment({
-        "id": f"cseg_{uuid.uuid4().hex[:12]}",
-        "user_id": user_id,
-        "source_parsed_segment_id": seg["id"],
+    status = "duplicate" if existing_dup else "confirmed"
+    
+    # Update the existing parsed segment in place!
+    updates = {
         "canonical_hash": canonical,
-        "artifact_id": seg.get("artifact_id"),
-        "source_type": seg.get("source_type"),
-        "sequence_index": seg.get("sequence_index"),
-        "airline_name": seg.get("airline_name"),
-        "airline_iata": seg.get("airline_iata"),
-        "flight_number": seg.get("flight_number"),
-        "booking_reference": seg.get("booking_reference"),
-        "pnr": seg.get("pnr") or seg.get("booking_reference"),
-        "passenger_name": seg.get("passenger_name"),
-        "ticket_number": seg.get("ticket_number"),
-        "departure_airport_iata": seg.get("departure_airport_iata"),
-        "arrival_airport_iata": seg.get("arrival_airport_iata"),
-        "departure_city_name": seg.get("departure_city_name"),
-        "arrival_city_name": seg.get("arrival_city_name"),
-        "departure_time_local": seg.get("departure_time_local"),
-        "arrival_time_local": seg.get("arrival_time_local"),
-        "departure_time_utc": seg.get("departure_time_utc"),
-        "arrival_time_utc": seg.get("arrival_time_utc"),
-        "flight_date": seg.get("flight_date"),
-        "flight_duration_minutes": seg.get("flight_duration_minutes"),
-        "seat_number": seg.get("seat_number"),
-        "terminal_departure": seg.get("terminal_departure"),
-        "terminal_arrival": seg.get("terminal_arrival"),
-        "gate": seg.get("gate"),
-        "status_text": seg.get("status_text"),
-        "confidence_score": seg.get("confidence_score"),
-        "aircraft_type": seg.get("aircraft_type"),
-        "cabin_class": seg.get("cabin_class"),
-        "time_confidence": seg.get("time_confidence"),
-        "duration_source": seg.get("duration_source"),
-        "confidence": seg.get("confidence"),
-        "parser_rule": seg.get("parser_rule"),
-        "missing_fields": seg.get("missing_fields") or [],
         "is_duplicate_of": existing_dup["id"] if existing_dup else None,
-        "status": "duplicate" if existing_dup else "confirmed",
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "status": status,
         "updated_at": datetime.now(timezone.utc).isoformat(),
-    })
-    res = await db.confirmed_segments.update_one(
-        {"user_id": user_id, "source_parsed_segment_id": seg["id"]},
-        {"$setOnInsert": confirmed},
-        upsert=True
-    )
-    if res.matched_count > 0:
-        existing = await db.confirmed_segments.find_one(
-            {"user_id": user_id, "source_parsed_segment_id": seg["id"]},
-            {"_id": 0}
-        )
-        if existing:
-            confirmed = existing
-    else:
-        confirmed.pop("_id", None)
-
-    await db.parsed_segments.update_one(
-        {"id": seg["id"], "user_id": user_id},
-        {"$set": {"status": "confirmed" if not existing_dup else "duplicate"}},
-    )
+    }
+    
+    # We also apply any manual edits the user made before confirming
+    editable_fields = [
+        "airline_name", "airline_iata", "flight_number", "booking_reference", 
+        "pnr", "passenger_name", "ticket_number", "departure_airport_iata",
+        "arrival_airport_iata", "departure_city_name", "arrival_city_name",
+        "departure_time_local", "arrival_time_local", "departure_time_utc",
+        "arrival_time_utc", "flight_date", "flight_duration_minutes",
+        "seat_number", "terminal_departure", "terminal_arrival", "gate"
+    ]
+    for f in editable_fields:
+        if f in seg:
+            updates[f] = seg[f]
+            
+    res_upd = supabase.table("flights").update(updates).eq("id", seg["id"]).eq("user_id", user_id).execute()
+    confirmed = res_upd.data[0] if res_upd.data else seg
+    
     if recompute:
         await _recompute_for_user(user_id)
+        
     return confirmed, bool(existing_dup)
 
 
 async def _recompute_for_user(user_id: str) -> dict:
-    raw_confirmed = await db.confirmed_segments.find(
-        {"user_id": user_id, "status": "confirmed"},
-        {"_id": 0}
-    ).sort("created_at", 1).to_list(2000)
+    supabase = get_supabase()
+    res = supabase.table("flights").select("*").eq("user_id", user_id).eq("status", "confirmed").order("created_at").execute()
+    raw_confirmed = res.data
     
     confirmed = []
     seen_hashes = set()
@@ -359,34 +316,31 @@ async def _recompute_for_user(user_id: str) -> dict:
             seen_hashes.add(h)
             confirmed.append(s)
             if s.get("canonical_hash") != h:
-                await db.confirmed_segments.update_one(
-                    {"id": s["id"]},
-                    {"$set": {"canonical_hash": h}}
-                )
+                supabase.table("flights").update({"canonical_hash": h}).eq("id", s["id"]).execute()
             
     if duplicates_to_demote:
-        await db.confirmed_segments.update_many(
-            {"id": {"$in": duplicates_to_demote}, "user_id": user_id},
-            {"$set": {"status": "duplicate"}}
-        )
+        # Supabase Python doesn't have an easy update_many by id list out of the box, we can loop or use .in_()
+        for dup_id in duplicates_to_demote:
+            supabase.table("flights").update({"status": "duplicate"}).eq("id", dup_id).execute()
 
-
-    profile = await db.user_profiles.find_one({"user_id": user_id}, {"_id": 0}) or {}
+    prof_res = supabase.table("profiles").select("*").eq("id", user_id).execute()
+    profile = prof_res.data[0] if prof_res.data else {}
+    
     trips, stays = derive_trips_and_stays(user_id, confirmed, profile.get("home_airport_iata"))
-    await db.trips.delete_many({"user_id": user_id})
-    if trips:
-        await db.trips.insert_many(trips)
-    await db.city_stays.delete_many({"user_id": user_id})
-    if stays:
-        await db.city_stays.insert_many(stays)
     monthly = compute_monthly_stats(user_id, confirmed, stays)
-    await db.monthly_stats.delete_many({"user_id": user_id})
-    if monthly:
-        await db.monthly_stats.insert_many(monthly)
-    # MongoDB mutates input dicts adding _id; strip it before returning.
-    for lst in (trips, stays, monthly):
-        for doc in lst:
-            doc.pop("_id", None)
+    
+    snapshot_data = {
+        "user_id": user_id,
+        "year": 0,  # 0 indicates 'all' years
+        "dashboard": {
+            "trips": trips,
+            "city_stays": stays,
+            "monthly_stats": monthly
+        }
+    }
+    # upsert on (user_id, year)
+    supabase.table("analytics_snapshots").upsert(snapshot_data, on_conflict="user_id,year").execute()
+    
     return {"trips": len(trips), "city_stays": len(stays), "monthly_stats": len(monthly)}
 
 
@@ -465,20 +419,15 @@ async def auth_session(payload: SessionExchangeReq, response: Response):
 
 @api.get("/auth/me")
 async def auth_me(user: dict = Depends(_auth)):
-    profile = await db.user_profiles.find_one({"user_id": user["user_id"]}, {"_id": 0})
+    supabase = get_supabase()
+    res = supabase.table("profiles").select("*").eq("id", user["user_id"]).execute()
+    profile = res.data[0] if res.data else {}
     return {"user": user, "profile": profile}
 
 
 @api.post("/auth/logout")
 async def auth_logout(request: Request, response: Response):
-    token = request.cookies.get(SESSION_COOKIE_NAME)
-    if not token:
-        auth = request.headers.get("Authorization") or ""
-        if auth.lower().startswith("bearer "):
-            token = auth.split(" ", 1)[1].strip()
-    if token:
-        await delete_session(db, token)
-    response.delete_cookie(SESSION_COOKIE_NAME, path="/")
+    # Handled by frontend via supabase.auth.signOut()
     return {"ok": True}
 
 
@@ -486,8 +435,9 @@ async def auth_logout(request: Request, response: Response):
 
 @api.get("/profile")
 async def get_profile(user: dict = Depends(_auth)):
-    profile = await db.user_profiles.find_one({"user_id": user["user_id"]}, {"_id": 0})
-    return profile or {}
+    supabase = get_supabase()
+    res = supabase.table("profiles").select("*").eq("id", user["user_id"]).execute()
+    return res.data[0] if res.data else {}
 
 
 @api.patch("/profile")
@@ -496,12 +446,12 @@ async def update_profile(payload: ProfileUpdate, user: dict = Depends(_auth)):
     if payload.home_airport_iata is not None:
         updates["home_airport_iata"] = payload.home_airport_iata.upper() if payload.home_airport_iata else None
     updates["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await db.user_profiles.update_one(
-        {"user_id": user["user_id"]},
-        {"$set": updates},
-        upsert=True,
-    )
-    profile = await db.user_profiles.find_one({"user_id": user["user_id"]}, {"_id": 0})
+    
+    supabase = get_supabase()
+    supabase.table("profiles").update(updates).eq("id", user["user_id"]).execute()
+    
+    res = supabase.table("profiles").select("*").eq("id", user["user_id"]).execute()
+    profile = res.data[0] if res.data else {}
     # If home airport changed, recompute derived data
     if "home_airport_iata" in updates:
         await _recompute_for_user(user["user_id"])
@@ -633,7 +583,7 @@ async def ingest_boarding_pass(payload: BoardingPassIngestReq, user: dict = Depe
             from services.pdf_parser import parse_ticket_text
             text_result = parse_ticket_text(candidate_text)
             if text_result.get("valid") or text_result.get("confidence", 0) >= 0.4:
-                artifact_id = f"art_{uuid.uuid4().hex[:12]}"
+                artifact_id = str(uuid.uuid4())
                 artifact_doc = {
                     "id": artifact_id,
                     "user_id": user["user_id"],
@@ -663,7 +613,7 @@ async def ingest_boarding_pass(payload: BoardingPassIngestReq, user: dict = Depe
                     dep_meta = lookup_airport(seg_fields.get("from_airport"))
                     arr_meta = lookup_airport(seg_fields.get("to_airport"))
                     segment = {
-                        "id": f"pseg_{uuid.uuid4().hex[:12]}",
+                        "id": str(uuid.uuid4()),
                         "artifact_id": artifact_id,
                         "user_id": user["user_id"],
                         "source_type": "pdf_eticket",
@@ -718,7 +668,7 @@ async def ingest_boarding_pass(payload: BoardingPassIngestReq, user: dict = Depe
                     "enrichment_enabled": flight_status_client.enabled,
                 }
 
-    artifact_id = f"art_{uuid.uuid4().hex[:12]}"
+    artifact_id = str(uuid.uuid4())
     artifact_doc = {
         "id": artifact_id,
         "user_id": user["user_id"],
@@ -781,7 +731,7 @@ async def create_manual(payload: ManualFlightReq, user: dict = Depends(_auth)):
     airline = lookup_airline(payload.airline_iata)
     dep = lookup_airport(payload.departure_airport_iata)
     arr = lookup_airport(payload.arrival_airport_iata)
-    artifact_id = f"art_{uuid.uuid4().hex[:12]}"
+    artifact_id = str(uuid.uuid4())
     artifact_doc = {
         "id": artifact_id,
         "user_id": user["user_id"],
@@ -809,16 +759,20 @@ async def create_manual(payload: ManualFlightReq, user: dict = Depends(_auth)):
     dep_utc_str = None
     arr_utc_str = None
     if payload.flight_date:
-        dep_utc_str = f"{payload.flight_date}T{local_time}:00.000Z"
         try:
-            dep_dt = datetime.strptime(dep_utc_str, "%Y-%m-%dT%H:%M:%S.%fZ")
-            arr_dt = dep_dt + timedelta(minutes=duration)
-            arr_utc_str = arr_dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+            import zoneinfo
+            dep_tz_name = (dep or {}).get("tz") or "UTC"
+            naive_dt = datetime.strptime(f"{payload.flight_date}T{local_time}", "%Y-%m-%dT%H:%M")
+            aware_dt = naive_dt.replace(tzinfo=zoneinfo.ZoneInfo(dep_tz_name))
+            dep_utc_dt = aware_dt.astimezone(timezone.utc)
+            dep_utc_str = dep_utc_dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+            arr_utc_dt = dep_utc_dt + timedelta(minutes=duration)
+            arr_utc_str = arr_utc_dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
         except Exception:
-            pass
+            dep_utc_str = f"{payload.flight_date}T{local_time}:00.000Z"
 
     segment = {
-        "id": f"pseg_{uuid.uuid4().hex[:12]}",
+        "id": str(uuid.uuid4()),
         "artifact_id": artifact_id,
         "user_id": user["user_id"],
         "airline_name": (airline or {}).get("name"),
@@ -884,7 +838,7 @@ async def upload_pdf(
         raise HTTPException(status_code=400, detail="Empty file")
     result = parse_pdf_ticket(pdf_bytes)
     fields = result.get("fields") or {}
-    artifact_id = f"art_{uuid.uuid4().hex[:12]}"
+    artifact_id = str(uuid.uuid4())
     artifact_doc = {
         "id": artifact_id,
         "user_id": user["user_id"],
@@ -913,7 +867,7 @@ async def upload_pdf(
         dep_meta = lookup_airport(seg_fields.get("from_airport"))
         arr_meta = lookup_airport(seg_fields.get("to_airport"))
         segment = {
-            "id": f"pseg_{uuid.uuid4().hex[:12]}",
+            "id": str(uuid.uuid4()),
             "artifact_id": artifact_id,
             "user_id": user["user_id"],
             "source_type": "pdf_eticket",
@@ -1126,14 +1080,16 @@ async def delete_all_data(user: dict = Depends(_auth)):
 
 @api.get("/trips")
 async def list_trips(user: dict = Depends(_auth)):
-    items = await db.trips.find({"user_id": user["user_id"]}, {"_id": 0}).sort("start_time_utc", -1).to_list(500)
+    supabase = get_supabase()
+    res = supabase.table("analytics_snapshots").select("dashboard").eq("user_id", user["user_id"]).eq("year", 0).execute()
+    if not res.data:
+        return []
+    items = res.data[0]["dashboard"].get("trips", [])
     # Attach segments
     for t in items:
         if t.get("segment_ids"):
-            segs = await db.confirmed_segments.find(
-                {"user_id": user["user_id"], "id": {"$in": t["segment_ids"]}},
-                {"_id": 0},
-            ).to_list(100)
+            segs_res = supabase.table("flights").select("*").in_("id", t["segment_ids"]).eq("user_id", user["user_id"]).execute()
+            segs = segs_res.data if segs_res.data else []
             segs.sort(key=lambda s: s.get("departure_time_utc") or s.get("flight_date") or "")
             t["segments"] = segs
     return items
@@ -1141,16 +1097,30 @@ async def list_trips(user: dict = Depends(_auth)):
 
 @api.get("/city-stays")
 async def list_city_stays(user: dict = Depends(_auth)):
-    items = await db.city_stays.find({"user_id": user["user_id"]}, {"_id": 0}).sort("start_time_utc", -1).to_list(500)
-    return items
+    supabase = get_supabase()
+    res = supabase.table("analytics_snapshots").select("dashboard").eq("user_id", user["user_id"]).eq("year", 0).execute()
+    if not res.data:
+        return []
+    return res.data[0]["dashboard"].get("city_stays", [])
 
 
 @api.get("/dashboard")
 async def dashboard(user: dict = Depends(_auth)):
-    confirmed = await db.confirmed_segments.find({"user_id": user["user_id"], "status": "confirmed"}, {"_id": 0}).to_list(2000)
-    trips = await db.trips.find({"user_id": user["user_id"]}, {"_id": 0}).to_list(500)
-    stays = await db.city_stays.find({"user_id": user["user_id"]}, {"_id": 0}).to_list(500)
-    profile = await db.user_profiles.find_one({"user_id": user["user_id"]}, {"_id": 0}) or {}
+    supabase = get_supabase()
+    res = supabase.table("analytics_snapshots").select("dashboard").eq("user_id", user["user_id"]).eq("year", 0).execute()
+    if not res.data:
+        return compute_dashboard([], [], [], None)
+    
+    dash = res.data[0]["dashboard"]
+    trips = dash.get("trips", [])
+    stays = dash.get("city_stays", [])
+    
+    res_flights = supabase.table("flights").select("*").eq("user_id", user["user_id"]).eq("status", "confirmed").execute()
+    confirmed = res_flights.data if res_flights.data else []
+    
+    prof_res = supabase.table("profiles").select("*").eq("id", user["user_id"]).execute()
+    profile = prof_res.data[0] if prof_res.data else {}
+    
     return compute_dashboard(confirmed, trips, stays, profile.get("home_airport_iata"))
 
 
@@ -1165,10 +1135,19 @@ async def wrapped(year: Optional[str] = None, user: dict = Depends(_auth)):
     elif not year:
         selected_year = datetime.now(timezone.utc).year
 
-    confirmed = await db.confirmed_segments.find({"user_id": user["user_id"], "status": "confirmed"}, {"_id": 0}).to_list(2000)
-    trips = await db.trips.find({"user_id": user["user_id"]}, {"_id": 0}).to_list(500)
-    stays = await db.city_stays.find({"user_id": user["user_id"]}, {"_id": 0}).to_list(1000)
-    profile = await db.user_profiles.find_one({"user_id": user["user_id"]}, {"_id": 0}) or {}
+    supabase = get_supabase()
+    res = supabase.table("analytics_snapshots").select("dashboard").eq("user_id", user["user_id"]).eq("year", 0).execute()
+    dash = res.data[0]["dashboard"] if res.data else {}
+    
+    trips = dash.get("trips", [])
+    stays = dash.get("city_stays", [])
+    
+    res_flights = supabase.table("flights").select("*").eq("user_id", user["user_id"]).eq("status", "confirmed").execute()
+    confirmed = res_flights.data if res_flights.data else []
+    
+    prof_res = supabase.table("profiles").select("*").eq("id", user["user_id"]).execute()
+    profile = prof_res.data[0] if prof_res.data else {}
+    
     return compute_wrapped(confirmed, trips, stays, profile.get("home_airport_iata"), selected_year)
 
 
@@ -1180,8 +1159,14 @@ async def map_data(year: Optional[str] = None, user: dict = Depends(_auth)):
             parsed_year = int(year)
         except ValueError:
             pass
-    confirmed = await db.confirmed_segments.find({"user_id": user["user_id"], "status": "confirmed"}, {"_id": 0}).to_list(2000)
-    profile = await db.user_profiles.find_one({"user_id": user["user_id"]}, {"_id": 0}) or {}
+            
+    supabase = get_supabase()
+    res_flights = supabase.table("flights").select("*").eq("user_id", user["user_id"]).eq("status", "confirmed").execute()
+    confirmed = res_flights.data if res_flights.data else []
+    
+    prof_res = supabase.table("profiles").select("*").eq("id", user["user_id"]).execute()
+    profile = prof_res.data[0] if prof_res.data else {}
+    
     return compute_map_data(confirmed, profile.get("home_airport_iata"), parsed_year)
 
 
@@ -1194,11 +1179,15 @@ async def cities_summary(window: str = "all", user: dict = Depends(_auth)):
     last_visit. Useful for 'where have I been and how long' views.
     """
     from datetime import timedelta
-    profile = await db.user_profiles.find_one({"user_id": user["user_id"]}, {"_id": 0}) or {}
+    profile_res = get_supabase().table("profiles").select("*").eq("id", user["user_id"]).execute()
+    profile = profile_res.data[0] if profile_res.data else {}
     home_iata = (profile.get("home_airport_iata") or "").upper() or None
 
-    confirmed = await db.confirmed_segments.find({"user_id": user["user_id"], "status": "confirmed"}, {"_id": 0}).to_list(2000)
-    stays = await db.city_stays.find({"user_id": user["user_id"]}, {"_id": 0}).to_list(2000)
+    flights_res = get_supabase().table("flights").select("*").eq("user_id", user["user_id"]).eq("status", "confirmed").execute()
+    confirmed = flights_res.data if flights_res.data else []
+    
+    snap_res = get_supabase().table("analytics_snapshots").select("dashboard").eq("user_id", user["user_id"]).eq("year", 0).execute()
+    stays = snap_res.data[0]["dashboard"].get("city_stays", []) if snap_res.data else []
 
     now = datetime.now(timezone.utc)
     cutoff = None
