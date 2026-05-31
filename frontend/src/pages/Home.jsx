@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Plane, Clock4, Home as HomeIcon, Building2, Route, Trophy, Timer, Sparkles, CalendarDays,
-  PlusCircle, Map, ListTree, Globe2, ArrowRight, Camera, MapPin, FileText
+  PlusCircle, Map, ListTree, Globe2, ArrowRight, Camera, MapPin, FileText, ChevronRight
 } from "lucide-react";
 import { motion } from "framer-motion";
 import {
@@ -16,6 +16,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import LeafletTravelMap from "@/components/LeafletTravelMap";
 import ComponentErrorBoundary from "@/components/ComponentErrorBoundary";
+import AirlineLogo from "@/components/AirlineLogo";
+import { cityImageUrl } from "@/pages/Cities";
 import {
   AnimatedGlobeIcon,
   AnimatedPlaneIcon,
@@ -39,14 +41,14 @@ import {
 } from "@/components/ui/AnimatedIcons";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const COLORS = ["hsl(var(--primary))", "hsl(var(--muted-foreground))", "#38bdf8"];
+const COLORS = ["hsl(var(--primary))", "hsl(var(--muted-foreground))", "#70b8ff"];
 
 const KpiTile = ({ label, value, suffix = "", icon: Icon, decimals = 0, testId, subtext, iconClass = "" }) => (
   <motion.div
-    whileHover={{ scale: 1.025, boxShadow: "0 12px 30px rgba(56,189,248,0.08)" }}
+    whileHover={{ borderColor: "rgba(59, 158, 255, 0.5)" }}
     whileTap={{ scale: 0.98 }}
-    transition={{ type: "spring", stiffness: 400, damping: 20 }}
-    className="tl-card tl-card-intense tl-card-interactive p-4 flex flex-col justify-between h-28"
+    transition={{ duration: 0.15 }}
+    className="tl-card tl-card-interactive p-4 flex flex-col justify-between h-28"
     data-testid={testId}
   >
     <div className="flex items-center justify-between">
@@ -61,22 +63,22 @@ const KpiTile = ({ label, value, suffix = "", icon: Icon, decimals = 0, testId, 
 );
 
 const glowShadows = {
-  emerald: "shadow-[0_8px_30px_rgba(16,185,129,0.18)] border-emerald-500/30",
-  gold: "shadow-[0_8px_30px_rgba(245,158,11,0.18)] border-amber-500/30",
-  sky: "shadow-[0_8px_30px_rgba(14,165,233,0.18)] border-sky-500/30",
-  violet: "shadow-[0_8px_30px_rgba(139,92,246,0.18)] border-violet-500/30",
-  rose: "shadow-[0_8px_30px_rgba(244,63,94,0.18)] border-rose-500/30",
+  emerald: "shadow-none border-emerald-500/30",
+  gold: "shadow-none border-amber-500/30",
+  sky: "shadow-none border-sky-500/30",
+  violet: "shadow-none border-violet-500/30",
+  rose: "shadow-none border-rose-500/30",
 };
 
 const InsightVisualCard = ({ title, detail, icon: Icon, tone = "emerald", metric }) => {
-  const glowClass = glowShadows[tone] || "shadow-[0_8px_30px_rgba(255,255,255,0.05)] border-white/10";
+  const glowClass = glowShadows[tone] || "shadow-none border-white/10";
   return (
     <motion.div
       initial={{ opacity: 0, y: 12, scale: 0.98 }}
       whileInView={{ opacity: 1, y: 0, scale: 1 }}
       viewport={{ once: true, amount: 0.35 }}
       transition={{ duration: 0.35 }}
-      className={`tl-insight-card tl-insight-${tone} border ${glowClass} backdrop-blur-md`}
+      className={`tl-insight-card tl-insight-${tone} border ${glowClass} min-w-[80%] snap-center flex-shrink-0`}
     >
       <div className="tl-insight-graphic" aria-hidden>
         <span className="tl-insight-ring" />
@@ -91,19 +93,24 @@ const InsightVisualCard = ({ title, detail, icon: Icon, tone = "emerald", metric
   );
 };
 
-const CustomChartTooltip = ({ active, payload }) => {
+const CustomChartTooltip = ({ active, payload, monthlyDetails }) => {
   if (active && payload && payload.length && payload[0]) {
     const data = payload[0].payload;
     if (!data || !data.month) return null;
-    const dateObj = new Date(data.month + "-02"); // Add day to avoid timezone issue
+    const dateObj = new Date(data.month + "-02");
     if (isNaN(dateObj.getTime())) return null;
     const monthName = MONTHS[dateObj.getMonth()];
     const year = dateObj.getFullYear();
+    const monthKey = data.month;
 
     const flights = data.flights;
     const airMinutes = data.air_minutes || 0;
     const hours = Math.floor(airMinutes / 60);
     const mins = Math.round(airMinutes % 60);
+    
+    // Get enriched data from monthlyDetails
+    const details = monthlyDetails?.[monthKey];
+    
     return (
       <div className="tl-card p-3 shadow-lg border border-primary/20 backdrop-blur-md bg-background/90 text-sm flex flex-col gap-1.5 animate-fade-up z-50">
         <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">{monthName} {year}</p>
@@ -116,11 +123,27 @@ const CustomChartTooltip = ({ active, payload }) => {
         {airMinutes > 0 && (
           <div className="flex items-center justify-between gap-6">
             <span className="text-foreground/80 flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-sky-400" /> Air time:
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#70b8ff' }} /> Air time:
             </span>
-            <span className="font-semibold text-sky-400">
+            <span className="font-semibold" style={{ color: '#70b8ff' }}>
               {hours > 0 ? `${hours}h ` : ""}{mins}m
             </span>
+          </div>
+        )}
+        {details?.topRoute && (
+          <div className="flex items-center justify-between gap-6">
+            <span className="text-foreground/80 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#ff9592' }} /> Top route:
+            </span>
+            <span className="font-semibold text-[11px] tl-mono">{details.topRoute}</span>
+          </div>
+        )}
+        {details?.topAirline && (
+          <div className="flex items-center justify-between gap-6">
+            <span className="text-foreground/80 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#baa7ff' }} /> Top airline:
+            </span>
+            <span className="font-semibold text-[11px]">{details.topAirline}</span>
           </div>
         )}
       </div>
@@ -134,7 +157,7 @@ const CustomPieTooltip = ({ active, payload }) => {
     const data = payload[0];
     if (!data || !data.payload) return null;
     const name = data.name;
-    const value = data.value; // value is in minutes
+    const value = data.value;
     const days = (value / (60 * 24)).toFixed(1);
     const hours = (value / 60).toFixed(1);
     let displayValue = `${days} days`;
@@ -157,23 +180,6 @@ const CustomPieTooltip = ({ active, payload }) => {
   return null;
 };
 
-const ActionTile = ({ icon: Icon, title, desc, onClick, testId }) => (
-  <motion.button
-    onClick={onClick}
-    whileHover={{ scale: 1.025, translateY: -2 }}
-    whileTap={{ scale: 0.98 }}
-    transition={{ type: "spring", stiffness: 400, damping: 20 }}
-    className="tl-action-tile"
-    data-testid={testId}
-  >
-    <span className="tl-action-icon"><Icon size={16} /></span>
-    <span className="min-w-0 text-left">
-      <span className="block text-sm font-semibold">{title}</span>
-      <span className="block text-[11px] text-muted-foreground mt-0.5 leading-snug">{desc}</span>
-    </span>
-  </motion.button>
-);
-
 /* ============ EMPTY STATE — First-time user ============ */
 function EmptyDashboard({ navigate, hello }) {
   const previewSections = [
@@ -183,7 +189,6 @@ function EmptyDashboard({ navigate, hello }) {
       icon: ListTree,
       image: "https://images.pexels.com/photos/3769138/pexels-photo-3769138.jpeg?auto=compress&cs=tinysrgb&w=400",
       path: "/timeline",
-      color: "from-blue-500/20 to-cyan-500/20",
     },
     {
       title: "Travel Map",
@@ -191,7 +196,6 @@ function EmptyDashboard({ navigate, hello }) {
       icon: Map,
       image: "https://images.pexels.com/photos/1252500/pexels-photo-1252500.jpeg?auto=compress&cs=tinysrgb&w=400",
       path: "/map",
-      color: "from-emerald-500/20 to-teal-500/20",
     },
     {
       title: "Wrapped",
@@ -199,7 +203,6 @@ function EmptyDashboard({ navigate, hello }) {
       icon: Globe2,
       image: "https://images.pexels.com/photos/346885/pexels-photo-346885.jpeg?auto=compress&cs=tinysrgb&w=400",
       path: "/wrapped",
-      color: "from-violet-500/20 to-purple-500/20",
     },
   ];
 
@@ -210,10 +213,10 @@ function EmptyDashboard({ navigate, hello }) {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="tl-card tl-card-intense p-5 relative overflow-hidden"
+        className="tl-card p-5 relative overflow-hidden"
         data-testid="hero-insight-card"
       >
-        <div className="tl-radar-grid absolute inset-0 opacity-30 pointer-events-none" />
+        <div className="tl-radar-grid absolute inset-0 opacity-20 pointer-events-none" />
         <div className="relative">
           <div className="flex items-center gap-2 text-primary mb-3">
             <Sparkles size={13} />
@@ -249,7 +252,7 @@ function EmptyDashboard({ navigate, hello }) {
           <button
             key={label}
             onClick={onClick}
-            className="tl-card tl-card-interactive flex flex-col items-center justify-center gap-2 py-4 hover:border-primary/30 transition-all"
+            className="tl-card tl-card-interactive flex flex-col items-center justify-center gap-2 py-4"
           >
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
               <QIcon size={18} />
@@ -274,13 +277,12 @@ function EmptyDashboard({ navigate, hello }) {
             onClick={() => navigate(section.path)}
             className="tl-card tl-card-interactive w-full overflow-hidden text-left group"
           >
-            <div className="relative h-32 overflow-hidden">
+            <div className="relative h-32 overflow-hidden rounded-t-2xl">
               <img
                 src={section.image}
                 alt={section.title}
                 className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
               />
-              <div className={`absolute inset-0 bg-gradient-to-t ${section.color} via-background/80 to-transparent`} />
               <div className="absolute inset-0 bg-gradient-to-t from-background to-transparent" />
             </div>
             <div className="p-4 -mt-8 relative z-10">
@@ -316,30 +318,15 @@ export default function Home() {
   const [citiesData, setCitiesData] = useState([]);
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState("all");
-  const [citiesYear, setCitiesYear] = useState(currentYear);
   const [mapRoutes, setMapRoutes] = useState({ routes: [], markers: [] });
   const [flights, setFlights] = useState([]);
 
-  // 1. Check if ANY flights exist across all years, and determine default/active years
+  // 1. Load all flights — default to "all" time
   useEffect(() => {
     (async () => {
       try {
         const { data: flightsList } = await api.get("/flights");
         setFlights(flightsList || []);
-        
-        if (flightsList && flightsList.length > 0) {
-          const uniqueYears = Array.from(new Set(flightsList.map(f => {
-            const d = f.departure_time_utc || f.flight_date;
-            return d ? new Date(d).getFullYear() : null;
-          }).filter(Boolean))).sort((a, b) => b - a);
-
-          const currentYearStr = String(new Date().getFullYear());
-          const defaultYear = uniqueYears.map(String).includes(currentYearStr)
-            ? currentYearStr
-            : (uniqueYears[0] ? String(uniqueYears[0]) : "all");
-          
-          setSelectedYear(defaultYear);
-        }
       } catch (err) {
         console.error("Failed to load flights on mount:", err);
       } finally {
@@ -370,30 +357,69 @@ export default function Home() {
     })();
   }, [selectedYear, loading, flights.length]);
 
-  // 3. Keep citiesYear synchronized with selectedYear
-  useEffect(() => {
-    if (selectedYear !== "all") {
-      setCitiesYear(Number(selectedYear));
-    } else {
-      setCitiesYear("all");
-    }
-  }, [selectedYear]);
-
-  // 4. Fetch cities travelled list based on citiesYear
+  // 3. Fetch cities travelled list based on selectedYear
   useEffect(() => {
     if (!data?.total_flights) return;
-    api.get("/cities", { params: { year: citiesYear } })
+    api.get("/cities", { params: { year: selectedYear } })
       .then(({ data: res }) => setCitiesData(res?.cities || res || []))
       .catch(() => setCitiesData([]));
-  }, [citiesYear, data?.total_flights]);
+  }, [selectedYear, data?.total_flights]);
 
-  // 5. Fetch map routes based on selectedYear
+  // 4. Fetch map routes based on selectedYear
   useEffect(() => {
     if (!data?.total_flights) return;
     api.get("/map-data", { params: { year: selectedYear } })
       .then(({ data: res }) => setMapRoutes({ routes: res?.routes || [], markers: res?.airport_markers || [] }))
       .catch(() => {});
   }, [selectedYear, data?.total_flights]);
+
+  // 5. Compute monthly flight details for richer chart tooltips
+  const monthlyDetails = useMemo(() => {
+    if (!flights.length) return {};
+    const details = {};
+    
+    const filteredFlights = selectedYear === "all" ? flights : flights.filter(f => {
+      const d = f.departure_time_utc || f.flight_date;
+      return d && new Date(d).getFullYear() === Number(selectedYear);
+    });
+    
+    filteredFlights.forEach(f => {
+      const d = f.departure_time_utc || f.flight_date;
+      if (!d) return;
+      const monthKey = d.slice(0, 7); // YYYY-MM
+      if (!details[monthKey]) {
+        details[monthKey] = { routes: {}, airlines: {} };
+      }
+      const route = `${f.departure_airport_iata || "?"}-${f.arrival_airport_iata || "?"}`;
+      details[monthKey].routes[route] = (details[monthKey].routes[route] || 0) + 1;
+      const airline = f.airline_name || f.airline_iata || "Unknown";
+      details[monthKey].airlines[airline] = (details[monthKey].airlines[airline] || 0) + 1;
+    });
+    
+    // Find top route and airline for each month
+    const result = {};
+    for (const [month, d] of Object.entries(details)) {
+      const topRoute = Object.entries(d.routes).sort((a, b) => b[1] - a[1])[0];
+      const topAirline = Object.entries(d.airlines).sort((a, b) => b[1] - a[1])[0];
+      result[month] = {
+        topRoute: topRoute ? topRoute[0] : null,
+        topAirline: topAirline ? topAirline[0] : null,
+      };
+    }
+    return result;
+  }, [flights, selectedYear]);
+
+  // 6. Get recent flights for timeline preview (last 3)
+  const recentFlights = useMemo(() => {
+    if (!flights.length) return [];
+    return [...flights]
+      .sort((a, b) => {
+        const da = a.departure_time_utc || a.flight_date || "";
+        const db = b.departure_time_utc || b.flight_date || "";
+        return db.localeCompare(da);
+      })
+      .slice(0, 3);
+  }, [flights]);
 
   const hello = profile?.preferred_name || (user?.name || "").split(" ")[0] || "there";
   const yr = new Date().getFullYear();
@@ -417,9 +443,9 @@ export default function Home() {
     <Shell title={`Hello, ${hello}`} right={<span className="text-[11px] text-muted-foreground tl-mono">{profile?.home_airport_iata || "—"}</span>}>
       {loading ? (
         <div className="flex flex-col gap-5 p-4 pb-10 animate-fade-up">
-          <div className="tl-card tl-card-intense p-5 h-40 animate-pulse" />
+          <div className="tl-card p-5 h-40 animate-pulse" />
           <div className="grid grid-cols-2 gap-3">
-            {[1,2,3,4].map(i => <div key={i} className="tl-card tl-card-intense h-28 animate-pulse" />)}
+            {[1,2,3,4].map(i => <div key={i} className="tl-card h-28 animate-pulse" />)}
           </div>
         </div>
       ) : !hasFlights ? (
@@ -431,10 +457,10 @@ export default function Home() {
             <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold mr-1 shrink-0">Year:</span>
             <button
               onClick={() => setSelectedYear("all")}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition shrink-0 ${
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold border transition shrink-0 ${
                 selectedYear === "all"
-                  ? "bg-primary text-primary-foreground border-primary shadow-[0_0_12px_rgba(59,130,246,0.3)]"
-                  : "bg-muted/40 hover:bg-muted text-muted-foreground border-border/55"
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-transparent hover:bg-secondary text-muted-foreground border-border"
               }`}
             >
               All Time
@@ -446,25 +472,26 @@ export default function Home() {
               <button
                 key={y}
                 onClick={() => setSelectedYear(String(y))}
-                className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition shrink-0 ${
+                className={`px-3 py-1.5 rounded-md text-xs font-semibold border transition shrink-0 ${
                   selectedYear === String(y)
-                    ? "bg-primary text-primary-foreground border-primary shadow-[0_0_12px_rgba(59,130,246,0.3)]"
-                    : "bg-muted/40 hover:bg-muted text-muted-foreground border-border/55"
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-transparent hover:bg-secondary text-muted-foreground border-border"
                 }`}
               >
                 {y}
               </button>
             ))}
           </div>
+
           {/* Hero insight */}
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="tl-card tl-card-intense p-5 relative overflow-hidden"
+            className="tl-card p-5 relative overflow-hidden"
             data-testid="hero-insight-card"
           >
-            <div className="tl-radar-grid absolute inset-0 opacity-30 pointer-events-none" />
+            <div className="tl-radar-grid absolute inset-0 opacity-20 pointer-events-none" />
             <div className="relative">
               <div className="flex items-center gap-2 text-primary">
                 <Sparkles size={13} />
@@ -488,7 +515,7 @@ export default function Home() {
               {data?.next_trip && (
                 <button
                   onClick={() => navigate("/timeline")}
-                  className="mt-4 w-full tl-card tl-card-interactive p-3 flex items-center gap-3 text-left hover:border-primary/40 transition"
+                  className="mt-4 w-full tl-card tl-card-interactive p-3 flex items-center gap-3 text-left transition"
                   data-testid="next-trip-card"
                 >
                   <CalendarDays size={16} className="text-primary" />
@@ -503,21 +530,115 @@ export default function Home() {
             </div>
           </motion.div>
 
-          <div className="grid grid-cols-2 gap-3" data-testid="home-actions">
-            <ActionTile testId="home-add-flight" icon={PlusCircle} title="Add flights" desc="Scan a boarding pass, upload a PDF, or add manually." onClick={() => navigate("/import")} />
-            <ActionTile testId="home-timeline" icon={ListTree} title="My timeline" desc="Every flight, layover & trip — in one beautiful feed." onClick={() => navigate("/timeline")} />
-            <ActionTile testId="home-map" icon={Map} title="Where I've been" desc="See every route & city on your personal travel map." onClick={() => navigate("/map")} />
-            <ActionTile testId="home-wrapped" icon={Globe2} title="Year in review" desc="Your travel highlights, stats & personality — beautifully wrapped." onClick={() => navigate("/wrapped")} />
+          {/* PROMINENT ADD FLIGHT CTA */}
+          <motion.button
+            onClick={() => navigate("/import")}
+            whileHover={{ borderColor: "rgba(59, 158, 255, 0.7)" }}
+            whileTap={{ scale: 0.98 }}
+            className="w-full tl-btn-primary flex items-center justify-center gap-2.5 py-4 text-base font-semibold"
+            data-testid="home-add-flight-cta"
+          >
+            <PlusCircle size={18} />
+            Add a Flight
+          </motion.button>
+
+          {/* Action tiles — Timeline + Year in Review */}
+          <div className="grid grid-cols-2 gap-3">
+            <motion.button
+              onClick={() => navigate("/timeline")}
+              whileHover={{ borderColor: "rgba(59, 158, 255, 0.4)" }}
+              className="tl-card tl-card-interactive p-4 text-left"
+              data-testid="home-timeline"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                  <ListTree size={16} />
+                </div>
+                <ChevronRight size={14} className="text-muted-foreground" />
+              </div>
+              <p className="text-sm font-semibold">My timeline</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{data?.total_flights || 0} flights logged</p>
+            </motion.button>
+
+            <motion.button
+              onClick={() => navigate("/wrapped")}
+              whileHover={{ borderColor: "rgba(59, 158, 255, 0.4)" }}
+              className="tl-card tl-card-interactive p-4 text-left"
+              data-testid="home-wrapped"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                  <Globe2 size={16} />
+                </div>
+                <ChevronRight size={14} className="text-muted-foreground" />
+              </div>
+              <p className="text-sm font-semibold">Year in review</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Stats, personality & milestones</p>
+            </motion.button>
           </div>
+
+          {/* Timeline Preview — last 3 flights */}
+          {recentFlights.length > 0 && (
+            <div className="tl-card p-4" data-testid="timeline-preview">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Recent</p>
+                  <p className="text-sm font-medium">Latest flights</p>
+                </div>
+                <button onClick={() => navigate("/timeline")} className="text-[10px] text-primary font-semibold flex items-center gap-0.5">
+                  View all <ArrowRight size={10} />
+                </button>
+              </div>
+              <div className="flex flex-col gap-2">
+                {recentFlights.map((f, idx) => {
+                  const iataKey = String(f.airline_iata || "").toUpperCase();
+                  const depTime = (() => {
+                    try {
+                      const t = f.departure_time_local || f.departure_time_utc;
+                      if (!t) return "—";
+                      if (String(t).match(/^\d{1,2}[:.]\d{2}/)) return String(t).replace(".", ":").slice(0, 5);
+                      return new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                    } catch { return "—"; }
+                  })();
+                  const dateStr = (() => {
+                    try {
+                      const d = f.flight_date || f.departure_time_utc;
+                      if (!d) return "";
+                      const dateObj = String(d).length === 10 ? new Date(`${d}T00:00:00`) : new Date(d);
+                      return dateObj.toLocaleDateString([], { day: "2-digit", month: "short" });
+                    } catch { return ""; }
+                  })();
+                  
+                  return (
+                    <button
+                      key={f.id || idx}
+                      onClick={() => navigate("/timeline")}
+                      className="flex items-center gap-3 p-2.5 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition text-left"
+                    >
+                      <div className="bg-white p-0.5 rounded-md flex items-center justify-center flex-shrink-0 w-7 h-7 border border-border">
+                        <AirlineLogo iata={iataKey} size={20} rounded="rounded-sm" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] text-muted-foreground">{dateStr} · {depTime}</p>
+                        <p className="text-xs font-semibold truncate">
+                          {f.departure_airport_iata || "?"} → {f.arrival_airport_iata || "?"} · {f.airline_name || iataKey}
+                        </p>
+                      </div>
+                      <ChevronRight size={12} className="text-muted-foreground flex-shrink-0" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Live map preview */}
           {mapRoutes.markers.length > 0 && (
             <motion.button
               onClick={() => navigate("/map")}
-              whileHover={{ scale: 1.015, translateY: -2 }}
-              whileTap={{ scale: 0.99 }}
-              transition={{ type: "spring", stiffness: 400, damping: 20 }}
-              className="tl-card tl-card-intense tl-card-interactive overflow-hidden text-left group relative"
+              whileHover={{ borderColor: "rgba(59, 158, 255, 0.4)" }}
+              transition={{ duration: 0.15 }}
+              className="tl-card tl-card-interactive overflow-hidden text-left group relative"
               data-testid="home-map-preview"
             >
               <div className="relative h-48 overflow-hidden rounded-t-2xl pointer-events-none">
@@ -530,10 +651,6 @@ export default function Home() {
                   </ComponentErrorBoundary>
                 </div>
                 <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
-                {/* Floating animated radar scope */}
-                <div className="absolute top-3 right-3 z-20 bg-background/80 backdrop-blur-md p-1.5 rounded-full border border-border/40 pointer-events-auto">
-                  <AnimatedRadarIcon size={36} />
-                </div>
               </div>
               <div className="p-4 -mt-6 relative z-10 flex items-center justify-between">
                 <div>
@@ -557,7 +674,7 @@ export default function Home() {
 
           {/* Home vs away ring */}
           {data && (data.home_minutes > 0 || data.away_minutes > 0) && (
-            <div className="tl-card tl-card-intense p-4" data-testid="home-vs-away-card">
+            <div className="tl-card p-4" data-testid="home-vs-away-card">
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Balance</p>
@@ -566,7 +683,7 @@ export default function Home() {
                 <div className="text-right text-xs text-muted-foreground">
                   <p><span className="inline-block w-2 h-2 rounded-full bg-primary mr-1" />Home {Math.round(data.home_days)}d</p>
                   <p><span className="inline-block w-2 h-2 rounded-full bg-muted-foreground/60 mr-1" />Away {Math.round(data.away_days)}d</p>
-                  <p><span className="inline-block w-2 h-2 rounded-full bg-sky-400 mr-1" />Air {Math.round(data.total_air_hours)}h</p>
+                  <p><span className="inline-block w-2 h-2 rounded-full mr-1" style={{ background: '#70b8ff' }} />Air {Math.round(data.total_air_hours)}h</p>
                 </div>
               </div>
               <div className="h-36">
@@ -584,7 +701,7 @@ export default function Home() {
 
           {/* Monthly flights */}
           {data?.monthly_series?.length > 0 && (
-            <div className="tl-card tl-card-intense p-4" data-testid="monthly-chart">
+            <div className="tl-card p-4" data-testid="monthly-chart">
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Rhythm</p>
@@ -605,7 +722,7 @@ export default function Home() {
                     <XAxis dataKey="month" tickFormatter={(v) => MONTHS[Math.max(0, Math.min(11, Number(String(v).slice(-2)) - 1))] || v} tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
                     <YAxis hide />
                     <Tooltip
-                      content={<CustomChartTooltip />}
+                      content={<CustomChartTooltip monthlyDetails={monthlyDetails} />}
                       cursor={{ stroke: "hsl(var(--primary))", strokeOpacity: 0.3 }}
                     />
                     <Area type="monotone" dataKey="flights" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#gradEm)" />
@@ -617,7 +734,7 @@ export default function Home() {
 
           {/* Top cities leaderboard */}
           {data?.top_cities?.length > 0 && (
-            <div className="tl-card tl-card-intense p-4" data-testid="top-cities-card">
+            <div className="tl-card p-4" data-testid="top-cities-card">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Leaderboard</p>
@@ -645,42 +762,41 @@ export default function Home() {
             </div>
           )}
 
-          {/* Cities Travelled — with year filter */}
+          {/* Cities Travelled — with real images */}
           {citiesData.length > 0 && (
-            <div className="tl-card tl-card-intense p-4" data-testid="cities-travelled">
+            <div className="tl-card p-4" data-testid="cities-travelled">
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Explored</p>
                   <p className="text-sm font-medium">Cities travelled</p>
                 </div>
-                <div className="flex items-center gap-1">
-                  {[currentYear, currentYear - 1, currentYear - 2].map(y => (
-                    <button
-                      key={y}
-                      onClick={() => setCitiesYear(y)}
-                      className={`text-[10px] px-2 py-1 rounded-full transition ${citiesYear === y ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
-                    >
-                      {y}
-                    </button>
-                  ))}
-                </div>
+                <MapPin size={14} className="text-muted-foreground" />
               </div>
               <div className="flex gap-2.5 overflow-x-auto no-scrollbar pb-1">
-                {citiesData.slice(0, 12).map((city) => (
-                  <button
-                    key={city.city || city.iata}
-                    onClick={() => navigate("/cities")}
-                    className="flex-shrink-0 w-28 tl-card tl-card-interactive p-3 text-center hover:border-primary/40 transition"
-                  >
-                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary mx-auto mb-2">
-                      <MapPin size={14} />
-                    </div>
-                    <p className="text-xs font-semibold truncate">{city.city || city.iata}</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">
-                      {city.visits || city.count || 0} visit{(city.visits || city.count || 0) !== 1 ? 's' : ''}
-                    </p>
-                  </button>
-                ))}
+                {citiesData.slice(0, 12).map((city) => {
+                  const imgUrl = cityImageUrl(city.iata, city.city);
+                  return (
+                    <button
+                      key={city.city || city.iata}
+                      onClick={() => navigate("/cities")}
+                      className="flex-shrink-0 w-28 h-36 rounded-xl overflow-hidden relative group"
+                    >
+                      <img 
+                        src={imgUrl} 
+                        alt={city.city || city.iata} 
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                        onError={(e) => { e.target.style.display = 'none'; }}
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                      <div className="absolute bottom-0 left-0 right-0 p-2.5">
+                        <p className="text-xs font-semibold text-white truncate">{city.city || city.iata}</p>
+                        <p className="text-[10px] text-white/70 mt-0.5">
+                          {city.visits || city.count || 0} visit{(city.visits || city.count || 0) !== 1 ? 's' : ''}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -689,7 +805,7 @@ export default function Home() {
           {(data?.top_route || data?.top_airline) && (
             <div className="grid grid-cols-2 gap-3">
               {data?.top_route && (
-                <button onClick={() => setDetail("route")} className="tl-card tl-card-interactive p-4 text-left hover:border-primary/40 transition" data-testid="top-route-card">
+                <button onClick={() => setDetail("route")} className="tl-card tl-card-interactive p-4 text-left transition" data-testid="top-route-card">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Top route</p>
                     <Route size={13} className="tl-icon-route" />
@@ -699,7 +815,7 @@ export default function Home() {
                 </button>
               )}
               {data?.top_airline_name && (
-                <button onClick={() => setDetail("airline")} className="tl-card tl-card-interactive p-4 text-left hover:border-primary/40 transition" data-testid="top-airline-card">
+                <button onClick={() => setDetail("airline")} className="tl-card tl-card-interactive p-4 text-left transition" data-testid="top-airline-card">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Top airline</p>
                     <Plane size={13} className="tl-icon-airline" />
@@ -711,14 +827,14 @@ export default function Home() {
             </div>
           )}
 
-          {/* Visual insights */}
+          {/* Visual insights — horizontal carousel */}
           {data?.insights?.length > 1 && (
-            <div className="flex flex-col gap-3" data-testid="insights-card">
+            <div data-testid="insights-card">
               <div className="flex items-center gap-2 mb-3 text-primary">
                 <Sparkles size={13} />
                 <p className="text-[10px] uppercase tracking-[0.22em]">Insights</p>
               </div>
-              <div className="grid grid-cols-1 gap-3">
+              <div className="flex gap-4 overflow-x-auto no-scrollbar snap-x pb-2">
                 <InsightVisualCard title="Above the clouds" metric={`${Math.round(data.total_air_hours || 0)}h`} detail={data.insights[0]} icon={AnimatedPlaneIcon} tone="emerald" />
                 <InsightVisualCard title="Home gravity" metric={`${Math.round(data.home_days || 0)}d`} detail={data.insights[1] || `${profile?.home_city_name || "Home"} anchors your year.`} icon={AnimatedHomeIcon} tone="gold" />
                 <InsightVisualCard title="Airport time" metric={`${Math.round(data.airport_hours || 0)}h`} detail={data.insights[2] || "Airport time is tracked as an estimate until exact check-in data is available."} icon={AnimatedClockIcon} tone="sky" />

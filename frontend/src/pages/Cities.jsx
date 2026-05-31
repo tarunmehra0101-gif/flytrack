@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { toast } from "sonner";
 
 // Curated, high-quality city hero images (Unsplash). Fallbacks degrade to solid gradient.
-const CITY_IMAGES = {
+export const CITY_IMAGES = {
   BOM: "https://images.unsplash.com/photo-1570168007204-dfb528c6958f?auto=format&fit=crop&w=600&q=60", // Mumbai
   DEL: "https://images.unsplash.com/photo-1587474260584-136574528ed5?auto=format&fit=crop&w=600&q=60", // Delhi
   BLR: "https://images.unsplash.com/photo-1596176530529-78163a4f7af2?auto=format&fit=crop&w=600&q=60", // Bengaluru
@@ -74,7 +74,7 @@ const CITY_IMAGES = {
   MCT: "https://images.unsplash.com/photo-1559662780-c3bab6f7e00b?auto=format&fit=crop&w=600&q=60", // Muscat
 };
 
-const PREMIUM_CITY_POOL = [
+export const PREMIUM_CITY_POOL = [
   "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=600&q=60", // Chicago
   "https://images.unsplash.com/photo-1519501025264-65ba15a82390?auto=format&fit=crop&w=600&q=60", // Tokyo
   "https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?auto=format&fit=crop&w=600&q=60", // NYC Skyline
@@ -101,7 +101,7 @@ function getStringHash(str) {
 }
 
 /** Fallback: use city name/IATA to get a deterministic beautiful photo from our premium pool. */
-function cityImageUrl(iata, cityName) {
+export function cityImageUrl(iata, cityName) {
   if (CITY_IMAGES[iata]) return CITY_IMAGES[iata];
   const lookupKey = cityName || iata || "";
   const hash = getStringHash(lookupKey);

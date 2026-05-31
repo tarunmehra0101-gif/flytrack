@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
+import React, { useEffect, useMemo, useCallback } from 'react';
+import { MapContainer, TileLayer, CircleMarker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -11,23 +11,19 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-const homeIcon = new L.Icon({
-  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
-
-const defaultIcon = new L.Icon({
-  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
+/** Fixes Leaflet tile rendering issues inside flex/grid wrappers */
+function MapResizer() {
+  const map = useMap();
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      setTimeout(() => {
+        map.invalidateSize();
+      }, 300);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [map]);
+  return null;
+}
 
 function MapBounds({ airports }) {
   const map = useMap();
@@ -35,16 +31,12 @@ function MapBounds({ airports }) {
   useEffect(() => {
     if (airports && airports.length > 0) {
       if (airports.length === 1) {
-        // If only 1 airport, just set view to it, don't try to fit bounds
         map.setView([airports[0].lat, airports[0].lng], 5, { animate: true });
       } else {
-        // Create a bounding box around all airports
         const bounds = L.latLngBounds(airports.map(a => [a.lat, a.lng]));
-        
-        // Calculate max zoom based on bounds
         map.fitBounds(bounds, { 
           padding: [50, 50],
-          maxZoom: 6, // Don't zoom in too close when there are only a few airports
+          maxZoom: 6,
           animate: true
         });
       }
@@ -85,10 +77,9 @@ function LeafletControls({ mapStyle, setMapStyle }) {
   );
 }
 
-export default function LeafletTravelMap({ mapData, selectedYear }) {
+export default function LeafletTravelMap({ mapData, selectedYear, onSelectRoute, onSelectAirport }) {
   const [mapStyle, setMapStyle] = React.useState('satellite');
 
-  // Extract and filter valid coordinates
   const airports = useMemo(() => {
     return (mapData?.airport_markers || []).filter(a => a.lat != null && a.lng != null);
   }, [mapData]);
@@ -101,8 +92,16 @@ export default function LeafletTravelMap({ mapData, selectedYear }) {
     );
   }, [mapData]);
 
+  const handleRouteClick = useCallback((route) => {
+    if (onSelectRoute) onSelectRoute(route);
+  }, [onSelectRoute]);
+
+  const handleAirportClick = useCallback((airport) => {
+    if (onSelectAirport) onSelectAirport(airport);
+  }, [onSelectAirport]);
+
   return (
-    <div className="w-full h-full relative overflow-hidden rounded-xl bg-slate-900" data-testid="leaflet-container">
+    <div className="w-full h-full relative overflow-hidden rounded-xl bg-black" data-testid="leaflet-container">
       <MapContainer 
         center={[20, 0]} 
         zoom={2} 
@@ -110,6 +109,9 @@ export default function LeafletTravelMap({ mapData, selectedYear }) {
         scrollWheelZoom={true}
         zoomControl={false}
       >
+        {/* Fix tile rendering in flex/grid wrappers */}
+        <MapResizer />
+
         {mapStyle === 'satellite' ? (
           <>
             <TileLayer
@@ -128,10 +130,7 @@ export default function LeafletTravelMap({ mapData, selectedYear }) {
           />
         )}
         
-        {/* Auto-fit map bounds */}
         <MapBounds airports={airports} />
-
-        {/* Custom zoom & style controls */}
         <LeafletControls mapStyle={mapStyle} setMapStyle={setMapStyle} />
 
         {/* Flight Routes */}
@@ -143,22 +142,25 @@ export default function LeafletTravelMap({ mapData, selectedYear }) {
               [r.to.lat, r.to.lng]
             ]}
             pathOptions={{ 
-              color: '#ff6b35', 
-              weight: Math.max(3, Math.min(8, (r.count || 1) * 1.2)), 
-              opacity: 0.85,
-              dashArray: '10, 10',
+              color: '#3b9eff', 
+              weight: Math.max(2, Math.min(6, (r.count || 1) * 1.2)), 
+              opacity: 0.75,
+              dashArray: '8, 8',
               className: 'leaflet-flight-path'
+            }}
+            eventHandlers={{
+              click: () => handleRouteClick(r),
             }}
           >
             <Popup className="tl-leaflet-popup">
               <div className="flex flex-col items-center text-center p-1 min-w-[120px]">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Route</p>
-                <div className="flex items-center gap-2 font-bold text-base my-1 text-slate-800">
+                <p className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Route</p>
+                <div className="flex items-center gap-2 font-bold text-base my-1 text-gray-800">
                   <span>{r.from.iata}</span>
-                  <span className="text-slate-400">➔</span>
+                  <span className="text-gray-400">➔</span>
                   <span>{r.to.iata}</span>
                 </div>
-                <div className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
+                <div className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-medium border border-blue-100">
                   {r.count} flight{r.count !== 1 ? 's' : ''} in {selectedYear}
                 </div>
               </div>
@@ -166,36 +168,44 @@ export default function LeafletTravelMap({ mapData, selectedYear }) {
           </Polyline>
         ))}
 
-        {/* Airports */}
+        {/* Airports — Circle Markers */}
         {airports.map((a, i) => (
-          <Marker 
+          <CircleMarker 
             key={`airport-${i}`} 
-            position={[a.lat, a.lng]}
-            icon={a.is_home ? homeIcon : defaultIcon}
+            center={[a.lat, a.lng]}
+            radius={Math.min(10, Math.max(5, (a.count || 1) * 1.5))}
+            pathOptions={{
+              color: '#ffffff',
+              weight: 2,
+              fillColor: a.is_home ? '#3ad389' : '#3b9eff',
+              fillOpacity: 0.9,
+            }}
+            eventHandlers={{
+              click: () => handleAirportClick(a),
+            }}
           >
             <Popup className="tl-leaflet-popup">
               <div className="flex flex-col gap-1 p-1 min-w-[140px]">
                 <div className="flex items-start justify-between gap-3">
-                  <span className="font-bold text-lg text-slate-800">{a.iata}</span>
+                  <span className="font-bold text-lg text-gray-800">{a.iata}</span>
                   {a.is_home && (
-                    <span className="text-[9px] uppercase tracking-wider bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold">
+                    <span className="text-[9px] uppercase tracking-wider bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-bold border border-emerald-100">
                       Home
                     </span>
                   )}
                 </div>
-                <span className="text-sm font-medium text-slate-600 border-b border-slate-100 pb-1 mb-1">
+                <span className="text-sm font-medium text-gray-600 border-b border-gray-100 pb-1 mb-1">
                   {a.city}, {a.country}
                 </span>
-                <span className="text-xs font-semibold text-slate-500">
+                <span className="text-xs font-semibold text-gray-500">
                   {a.count} visit{a.count !== 1 ? 's' : ''} in {selectedYear}
                 </span>
               </div>
             </Popup>
-          </Marker>
+          </CircleMarker>
         ))}
       </MapContainer>
 
-      {/* Global CSS for overriding Leaflet's default white popups to look slightly more modern */}
       <style dangerouslySetInnerHTML={{__html: `
         .leaflet-popup-content-wrapper {
           border-radius: 12px;
@@ -217,7 +227,7 @@ export default function LeafletTravelMap({ mapData, selectedYear }) {
           }
         }
         .leaflet-flight-path {
-          stroke-dasharray: 10, 10;
+          stroke-dasharray: 8, 8;
           animation: leaflet-dash 1.5s linear infinite;
         }
       `}} />
