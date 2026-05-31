@@ -67,10 +67,10 @@ function LeafletControls({ mapStyle, setMapStyle }) {
 
       <div className="absolute right-4 top-[220px] z-[1000] pointer-events-auto">
         <button 
-          onClick={() => setMapStyle(prev => prev === 'street' ? 'satellite' : 'street')}
+          onClick={() => setMapStyle(prev => prev === 'dark' ? 'light' : 'dark')}
           className="px-3 py-2 rounded-xl bg-black/55 hover:bg-black/75 border border-white/15 text-white backdrop-blur-md flex items-center gap-1.5 shadow-lg text-[10px] font-bold uppercase tracking-wider transition-all"
         >
-          {mapStyle === 'street' ? '🛰️ Satellite' : '🗺️ Map'}
+          {mapStyle === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode'}
         </button>
       </div>
     </>
@@ -78,7 +78,7 @@ function LeafletControls({ mapStyle, setMapStyle }) {
 }
 
 export default function LeafletTravelMap({ mapData, selectedYear, onSelectRoute, onSelectAirport }) {
-  const [mapStyle, setMapStyle] = React.useState('satellite');
+  const [mapStyle, setMapStyle] = React.useState('dark');
 
   const airports = useMemo(() => {
     return (mapData?.airport_markers || []).filter(a => a.lat != null && a.lng != null);
@@ -108,25 +108,20 @@ export default function LeafletTravelMap({ mapData, selectedYear, onSelectRoute,
         style={{ height: '100%', width: '100%', zIndex: 1 }}
         scrollWheelZoom={true}
         zoomControl={false}
+        attributionControl={false}
       >
         {/* Fix tile rendering in flex/grid wrappers */}
         <MapResizer />
 
-        {mapStyle === 'satellite' ? (
-          <>
-            <TileLayer
-              attribution='&copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-            />
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-              url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png"
-            />
-          </>
+        {mapStyle === 'dark' ? (
+          <TileLayer
+            attribution='&copy; OSM, CARTO'
+            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          />
         ) : (
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; OSM, CARTO'
+            url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
           />
         )}
         
