@@ -1,8 +1,54 @@
 import React from "react";
 import { Plane } from "lucide-react";
 import AirlineLogo from "@/components/AirlineLogo";
-import { AIRPORTS } from "@/data/airports";
+import { AIRPORTS, AIRLINES } from "@/data/airports";
 import { format, parse } from "date-fns";
+
+export const AIRLINE_BRANDS = {
+  // India
+  "AI": { name: "Air India", color: "#d42b1e" },
+  "6E": { name: "IndiGo", color: "#00a1de" },
+  "UK": { name: "Vistara", color: "#563c72" },
+  "SG": { name: "SpiceJet", color: "#d50000" },
+  "QP": { name: "Akasa Air", color: "#ff6600" },
+  "IX": { name: "Air India Express", color: "#e04e26" },
+  "I5": { name: "AirAsia India", color: "#e11b22" },
+  "G8": { name: "Go First", color: "#0057b8" },
+  // Middle East
+  "EK": { name: "Emirates", color: "#d71920" },
+  "EY": { name: "Etihad", color: "#bd8b2d" },
+  "QR": { name: "Qatar Airways", color: "#5c0632" },
+  // Europe
+  "BA": { name: "British Airways", color: "#075aaa" },
+  "LH": { name: "Lufthansa", color: "#05164d" },
+  "AF": { name: "Air France", color: "#002157" },
+  "KL": { name: "KLM", color: "#00a1de" },
+  "LX": { name: "SWISS", color: "#e30613" },
+  "TK": { name: "Turkish Airlines", color: "#c8102e" },
+  // Asia / Pacific
+  "SQ": { name: "Singapore Airlines", color: "#002d5e" },
+  "CX": { name: "Cathay Pacific", color: "#006564" },
+  "TG": { name: "Thai Airways", color: "#4a154b" },
+  "UL": { name: "SriLankan Airlines", color: "#005740" },
+  "MH": { name: "Malaysia Airlines", color: "#002060" },
+  "JL": { name: "Japan Airlines", color: "#d90011" },
+  "NH": { name: "ANA", color: "#003a7e" },
+  "KE": { name: "Korean Air", color: "#0055a5" },
+  "QF": { name: "Qantas", color: "#e01a22" },
+  "AK": { name: "AirAsia", color: "#e11b22" },
+  // Americas
+  "UA": { name: "United", color: "#002244" },
+  "AA": { name: "American", color: "#0078d2" },
+  "DL": { name: "Delta", color: "#003366" },
+  "B6": { name: "JetBlue", color: "#003a70" },
+  "WN": { name: "Southwest", color: "#304cb2" },
+  "AC": { name: "Air Canada", color: "#d31245" },
+  "VS": { name: "Virgin Atlantic", color: "#da291c" },
+  // Others
+  "GA": { name: "Garuda Indonesia", color: "#007a6e" },
+  "JT": { name: "Lion Air", color: "#e11b22" },
+};
+
 
 function fmtTime(value, date) {
   if (!value) return "";
