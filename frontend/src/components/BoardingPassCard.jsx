@@ -1,7 +1,10 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Plane, MapPin, UserRound } from "lucide-react";
+import { Plane, MapPin, UserRound, CalendarDays } from "lucide-react";
 import AirlineLogo from "@/components/AirlineLogo";
 import { AIRPORTS, AIRLINES } from "@/data/airports";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format, parse } from "date-fns";
 
 /**
  * Boarding-pass styled flight card — realistic white physical pass design.
@@ -203,7 +206,7 @@ export default function BoardingPassCard({ flight, compact = false, footerRight 
   })();
 
   // Editable input styles (for light bg)
-  const inputCls = "font-semibold bg-gray-100 border border-gray-300 rounded-md px-2 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200 text-gray-900 text-[11px]";
+  const inputCls = "font-semibold bg-gray-100 border border-gray-300 rounded-md px-2 focus:outline-none focus:border-[var(--color-electric-blue)] focus:ring-1 focus:ring-[var(--color-electric-blue)] text-[var(--color-void-black)] text-[11px] h-7 w-full shadow-sm placeholder:text-gray-400";
   const suggestionDropdownCls = "absolute left-0 top-full mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto";
   const suggestionItemCls = "w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors cursor-pointer text-gray-900 flex items-center justify-between text-xs";
 
@@ -403,7 +406,7 @@ export default function BoardingPassCard({ flight, compact = false, footerRight 
         <>
           {/* Passenger Details Grid — white bg, dark text */}
           <div className="px-5 py-4 border-t border-dashed border-gray-200 bg-white relative z-0">
-            <div className="grid grid-cols-3 gap-y-4 gap-x-3 text-left">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-4 gap-x-3 text-left">
               <div>
                 <p className="text-[8px] uppercase tracking-widest text-gray-400 font-semibold">Passenger</p>
                 {isAllEditable ? (
@@ -456,7 +459,7 @@ export default function BoardingPassCard({ flight, compact = false, footerRight 
                     type="time"
                     value={depTime}
                     onChange={(e) => handleFieldChange("departure_time_local", e.target.value)}
-                    className={`${inputCls} tl-mono h-7 mt-1 w-full`}
+                    className={`${inputCls} tl-mono mt-1`}
                   />
                 ) : (
                   <p className="text-[11px] font-bold text-gray-900 mt-0.5">{depTime || "—"}</p>
@@ -510,12 +513,28 @@ export default function BoardingPassCard({ flight, compact = false, footerRight 
               <div>
                 <p className="text-[8px] uppercase tracking-widest text-gray-400 font-semibold">Date</p>
                 {isEditable ? (
-                  <input
-                    type="date"
-                    value={dateLabel}
-                    onChange={(e) => handleFieldChange("flight_date", e.target.value)}
-                    className={`${inputCls} h-7 mt-1`}
-                  />
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button className={`${inputCls} mt-1 flex items-center justify-between px-2 text-left w-full max-w-[140px]`}>
+                        <span className={dateLabel ? "text-gray-900 font-semibold truncate" : "text-gray-400"}>
+                          {dateLabel ? format(parse(dateLabel, "yyyy-MM-dd", new Date()), "PP") : "Date..."}
+                        </span>
+                        <CalendarDays size={12} className="text-gray-500 ml-1 flex-shrink-0" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={dateLabel ? parse(dateLabel, "yyyy-MM-dd", new Date()) : undefined}
+                        onSelect={(date) => {
+                          if (date) {
+                            handleFieldChange("flight_date", format(date, "yyyy-MM-dd"));
+                          }
+                        }}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
                 ) : (
                   <p className="text-[11px] font-bold text-gray-900 mt-0.5">{dateLabel || "—"}</p>
                 )}

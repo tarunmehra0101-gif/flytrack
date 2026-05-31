@@ -422,12 +422,13 @@ export default function Home() {
   }, [flights]);
 
   const hello = profile?.preferred_name || (user?.name || "").split(" ")[0] || "there";
-  const yr = new Date().getFullYear();
-  const isLeap = (yr % 4 === 0 && yr % 100 !== 0) || yr % 400 === 0;
-  const totalYearMinutes = (isLeap ? 366 : 365) * 24 * 60;
-  const homePct = data?.home_minutes ? Math.round((data.home_minutes / totalYearMinutes) * 100) : 0;
-  const awayPct = data?.away_minutes ? Math.round((data.away_minutes / totalYearMinutes) * 100) : 0;
-  const airPct = data?.total_air_minutes ? Math.round((data.total_air_minutes / totalYearMinutes) * 100) : 0;
+  const totalLoggedMinutes = Math.max(
+    1,
+    (data?.home_minutes || 0) + (data?.away_minutes || 0) + (data?.total_air_minutes || 0)
+  );
+  const homePct = data?.home_minutes ? Math.round((data.home_minutes / totalLoggedMinutes) * 100) : 0;
+  const awayPct = data?.away_minutes ? Math.round((data.away_minutes / totalLoggedMinutes) * 100) : 0;
+  const airPct = data?.total_air_minutes ? Math.round((data.total_air_minutes / totalLoggedMinutes) * 100) : 0;
   const balanceData = data ? [
     { name: "Home", value: Math.max(0, data.home_minutes || 0) },
     { name: "Away", value: Math.max(0, data.away_minutes || 0) },

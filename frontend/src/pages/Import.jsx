@@ -77,7 +77,7 @@ export default function Import() {
   const navigate = useNavigate();
   const location = new URLSearchParams(window.location.search);
   const isOnboarding = location.get("onboarding") === "true";
-  useAuth();
+  const { user, profile } = useAuth();
   const fileInputRef = useRef(null);
   const [status, setStatus] = useState("idle"); // idle | reading | looking_up | preview | error
   const [uploadType, setUploadType] = useState(null); // null | "image" | "pdf"
@@ -486,7 +486,7 @@ export default function Import() {
 
   const resetManualForm = () => {
     setMAirline(null); setMFlightNumber(""); setMDate(""); setMFetched(null);
-    setMFrom(null); setMTo(null); setMSeat(""); setMPnr(""); setMPassenger("");
+    setMFrom(null); setMTo(null); setMSeat(""); setMPnr(""); 
     setMSelectedFlight(null); setMDepTime(""); setMArrTime("");
     setMAircraftType("");
   };
@@ -694,32 +694,32 @@ export default function Import() {
             </div>
 
             <div className="flex flex-col gap-5 bg-background p-4 rounded-2xl border border-border/50">
-              {/* Airline Selection */}
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-bold text-foreground">Airline</label>
-                <div className="h-[46px] relative">
-                  <Autocomplete
-                    kind="airline"
-                    value={mAirline}
-                    onSelect={(airline) => {
-                      setMAirline(airline);
-                      if (airline?.iata) {
-                        if (!mFlightNumber || !mFlightNumber.startsWith(airline.iata)) {
-                          setMFlightNumber(airline.iata);
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Airline Selection */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Airline</label>
+                  <div className="h-[46px] relative">
+                    <Autocomplete
+                      kind="airline"
+                      value={mAirline}
+                      onSelect={(airline) => {
+                        setMAirline(airline);
+                        if (airline?.iata) {
+                          if (!mFlightNumber || !mFlightNumber.startsWith(airline.iata)) {
+                            setMFlightNumber(airline.iata);
+                          }
                         }
-                      }
-                    }}
-                    testId="manual-airline"
-                    className="w-full h-full text-base"
-                  />
+                      }}
+                      testId="manual-airline"
+                      className="w-full h-full text-base"
+                    />
+                  </div>
                 </div>
-              </div>
 
-              {/* Flight Number Selection with Lookup button */}
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-bold text-foreground">Flight Number</label>
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <div className="flex-1 h-[46px] relative">
+                {/* Flight Number Selection */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Flight Number</label>
+                  <div className="h-[46px] relative">
                     <Autocomplete
                       kind="flight"
                       value={mSelectedFlight || mFlightNumber}
@@ -734,18 +734,48 @@ export default function Import() {
                       className="w-full h-full text-base"
                     />
                   </div>
-                  <button
-                    type="button"
-                    disabled={mFetching || !mAirline?.iata || !mFlightNumber.trim()}
-                    onClick={fetchManualDetails}
-                    className="tl-btn-secondary px-6 flex items-center justify-center gap-2 text-sm font-bold h-[46px] w-full sm:w-auto hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all shadow-sm"
-                    data-testid="manual-lookup-btn"
-                  >
-                    {mFetching ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                    Verify Flight
-                  </button>
+                </div>
+
+                {/* Date Picker Selection */}
+                <div className="flex flex-col gap-2 sm:col-span-2">
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Flight Date</label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button className="flex items-center justify-between w-full h-[46px] px-3 bg-white border border-border/60 rounded-xl text-left text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40 hover:border-border">
+                        <span className={mDate ? "text-foreground font-semibold" : "text-muted-foreground"}>
+                          {mDate ? format(parse(mDate, "yyyy-MM-dd", new Date()), "PPP") : "Select a date..."}
+                        </span>
+                        <CalendarDays size={18} className="text-muted-foreground" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={mDate ? parse(mDate, "yyyy-MM-dd", new Date()) : undefined}
+                        onSelect={(date) => {
+                          if (date) {
+                            setMDate(format(date, "yyyy-MM-dd"));
+                          } else {
+                            setMDate("");
+                          }
+                        }}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
+
+              <button
+                type="button"
+                disabled={mFetching || !mAirline?.iata || !mFlightNumber.trim() || !mDate}
+                onClick={fetchManualDetails}
+                className="tl-btn-secondary px-6 flex items-center justify-center gap-2 text-sm font-bold h-[46px] w-full hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all shadow-sm"
+                data-testid="manual-lookup-btn"
+              >
+                {mFetching ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                Verify Flight Data
+              </button>
             </div>
 
             {mFetching ? (
@@ -844,7 +874,13 @@ export default function Import() {
 
               {/* Pathway 3: Manual Flight Entry */}
               <button
-                onClick={() => setManualOpen(true)}
+                onClick={() => {
+                  setManualOpen(true);
+                  if (!mPassenger) {
+                    setMPassenger(profile?.preferred_name || user?.name || "");
+                  }
+                }}
+                disabled={isBusy}
                 className="tl-card tl-card-intense tl-card-interactive flex flex-col items-center justify-center p-6 text-center border-2 border-primary/20 hover:border-primary/60 transition-all duration-300 shadow-[0_4px_20px_-4px_rgba(37,99,235,0.15)] hover:shadow-[0_4px_30px_-2px_rgba(37,99,235,0.3)] min-h-[175px] group relative overflow-hidden"
                 data-testid="manual-entry-btn"
               >

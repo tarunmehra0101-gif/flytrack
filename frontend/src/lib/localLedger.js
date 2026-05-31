@@ -293,7 +293,7 @@ async function getKv(id, fallback = null) {
     if (id.startsWith("dashboard_") || id.startsWith("wrapped_")) {
       const parts = id.split("_");
       const key = parts[0];
-      const year = Number(parts[1]);
+      const year = parts[1] === "all" ? 0 : Number(parts[1]);
       const { data, error } = await supabase
         .from("analytics_snapshots")
         .select("*")
@@ -336,7 +336,7 @@ async function setKv(id, value) {
     if (id.startsWith("dashboard_") || id.startsWith("wrapped_")) {
       const parts = id.split("_");
       const key = parts[0];
-      const year = Number(parts[1]);
+      const year = parts[1] === "all" ? 0 : Number(parts[1]);
       const { data: existing } = await supabase
         .from("analytics_snapshots")
         .select("*")
