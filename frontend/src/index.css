@@ -2,37 +2,38 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Figtree:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
-  /* Colors - Slate Theme */
-  --color-void-black: #0f172a; /* Slate 900 */
-  --color-graphite-rail: #1e293b; /* Slate 800 */
-  --color-smoke: #334155; /* Slate 700 */
-  --color-ash: #475569; /* Slate 600 */
-  --color-steel: #64748b; /* Slate 500 */
-  --color-fog: #94a3b8; /* Slate 400 */
-  --color-mist: #cbd5e1; /* Slate 300 */
-  --color-frost: #f1f5f9; /* Slate 100 */
+  /* Colors - Obsidian & Amber Theme */
+  --color-void-black: #020401; /* Obsidian */
+  --color-graphite-rail: #0a0e08; 
+  --color-smoke: #1f2937;
+  --color-ash: #475569;
+  --color-steel: #64748b;
+  --color-fog: #94a3b8;
+  --color-mist: #cbd5e1;
+  --color-frost: #f1f5f9;
   --color-pure-white: #ffffff;
   
   /* Accent Colors */
-  --color-electric-blue: #38bdf8; /* Sky 400 */
-  --color-resend-violet: #818cf8; /* Indigo 400 */
-  --color-surface-lift: #1e293b; /* Slate 800 */
-  --color-delivered-green: #34d399; /* Emerald 400 */
-  --color-bounced-red: #fb7185; /* Rose 400 */
-  --color-complained-yellow: #fbbf24; /* Amber 400 */
-  --color-opened-blue: #7dd3fc; /* Sky 300 */
-  --color-clicked-lavender: #a78bfa; /* Violet 400 */
+  --color-electric-blue: #FF9D00; /* Vibrant Amber */
+  --color-resend-violet: #10B981; /* Emerald */
+  --color-surface-lift: #0a0e08; 
+  --color-delivered-green: #10B981;
+  --color-bounced-red: #8B0000; /* Deep Red */
+  --color-complained-yellow: #FF9D00;
+  --color-opened-blue: #FF9D00;
+  --color-clicked-lavender: #10B981;
 
   /* Typography */
-  --font-inter: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-domaine: 'Domaine', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-abcfavorit: 'ABCFavorit', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-commitmono: 'CommitMono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  --font-helvetica: 'Helvetica', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-inter: 'Figtree', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-domaine: 'Instrument Serif', serif;
+  --font-abcfavorit: 'Figtree', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-commitmono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-helvetica: 'Figtree', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-apple-system: '-apple-system', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
 
   /* Typography — Scale */
   --text-caption: 12px;
@@ -125,32 +126,75 @@ body {
         --radius: var(--radius-2xl);
     }
     .dark {
-        --background: 222 47% 11%;               /* Slate 900 */
-        --foreground: 210 40% 98%;               /* Slate 50 */
-        --card: 222 47% 11%;
-        --card-foreground: 210 40% 98%;
-        --popover: 222 47% 11%;
-        --popover-foreground: 210 40% 98%;
-        --primary: 199 89% 48%;                  /* Sky 500 */
-        --primary-foreground: 0 0% 100%;
-        --secondary: 217 33% 17%;                /* Slate 800 */
-        --secondary-foreground: 210 40% 98%;
-        --muted: 217 33% 17%;
-        --muted-foreground: 215 20% 65%;         /* Slate 400 */
-        --accent: 226 71% 60%;                   /* Indigo 500 */
-        --accent-foreground: 210 40% 98%;
-        --destructive: 346 87% 60%;              /* Rose 500 */
-        --destructive-foreground: 210 40% 98%;
-        --border: 217 33% 17%;                   /* Slate 800 */
-        --input: 217 33% 17%;
-        --ring: 199 89% 48%;
+        --background: 130 6% 1%;                 /* Obsidian #020401 */
+        --foreground: 0 0% 90%;                  /* Off white */
+        --card: 130 6% 1%;
+        --card-foreground: 0 0% 90%;
+        --popover: 130 6% 1%;
+        --popover-foreground: 0 0% 90%;
+        --primary: 37 100% 50%;                  /* Vibrant Amber #FF9D00 */
+        --primary-foreground: 130 6% 1%;         /* Obsidian text on primary */
+        --secondary: 130 6% 4%;                  /* Slightly lighter obsidian */
+        --secondary-foreground: 0 0% 90%;
+        --muted: 130 6% 4%;
+        --muted-foreground: 0 0% 60%;            /* white/60 */
+        --accent: 160 84% 39%;                   /* Emerald #10B981 */
+        --accent-foreground: 0 0% 90%;
+        --destructive: 0 100% 27%;               /* Deep Red #8B0000 */
+        --destructive-foreground: 0 0% 90%;
+        --border: 0 0% 20%;                      /* white/20 */
+        --input: 0 0% 20%;
+        --ring: 37 100% 50%;
     }
 }
 
 @layer base {
     * { @apply border-border; }
-    body { @apply bg-background text-foreground; }
+    body { @apply bg-background text-foreground canvas-bg antialiased; }
     [data-debug-wrapper="true"] { display: contents !important; }
+}
+
+@layer utilities {
+    .canvas-bg {
+        background: radial-gradient(circle at 50% 50%, #0a0e08 0%, #020401 100%);
+    }
+    .premium-card {
+        background: #020401;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        box-shadow: 0 50px 100px -30px rgba(0, 0, 0, 0.9);
+    }
+    .glow-primary { filter: drop-shadow(0 0 15px rgba(255, 157, 0, 0.5)); }
+    .glow-white { filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.3)); }
+    .glow-intense-primary { filter: drop-shadow(0 0 25px rgba(255, 157, 0, 0.6)); }
+    .glow-emerald {
+        background: radial-gradient(circle at 0% 0%, rgba(16, 185, 129, 0.15) 0%, transparent 70%);
+    }
+    .glow-amber {
+        background: radial-gradient(circle at 100% 100%, rgba(255, 157, 0, 0.12) 0%, transparent 70%);
+    }
+    .mesh-bg {
+        background-image: 
+            radial-gradient(at 0% 0%, hsla(160, 80%, 40%, 0.12) 0px, transparent 50%),
+            radial-gradient(at 100% 100%, hsla(38, 100%, 50%, 0.1) 0px, transparent 50%),
+            radial-gradient(at 50% 50%, hsla(160, 80%, 40%, 0.08) 0px, transparent 50%);
+    }
+    .input-box {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+    }
+    .selection-pill {
+        @apply px-4 py-2 rounded-full border border-white/10 text-sm transition-all cursor-pointer;
+    }
+    .selection-pill.active {
+        @apply border-primary/50 bg-primary/10 text-primary font-bold;
+    }
+    .organic-bar {
+        border-top-left-radius: 9999px;
+        border-top-right-radius: 9999px;
+        border-bottom-left-radius: 12px;
+        border-bottom-right-radius: 12px;
+    }
 }
 
 /* Portrait phone shell — Resend obsidian frame */

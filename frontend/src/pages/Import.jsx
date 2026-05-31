@@ -136,7 +136,7 @@ export default function Import() {
     seat_number: mSeat || "",
     booking_reference: mPnr || "",
     pnr: mPnr || "",
-    passenger_name: mPassenger || "",
+    passenger_name: mPassenger || profile?.preferred_name || user?.name || "",
     aircraft_type: mAircraftType || "",
   };
 
@@ -678,48 +678,45 @@ export default function Import() {
         )}
 
         {manualOpen ? (
-          <div className="tl-card p-5 flex flex-col gap-4 animate-fade-up" data-testid="manual-entry-form">
-            <div className="flex items-center justify-between border-b border-border pb-3">
+          <div className="premium-card p-6 flex flex-col gap-6 animate-fade-up border border-white/10" data-testid="manual-entry-form">
+            <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div className="flex items-center gap-2">
-                <PenLine size={16} className="text-primary" />
-                <h2 className="text-base font-bold text-foreground">Add Flight Manually</h2>
+                <PenLine size={18} className="text-primary glow-primary" />
+                <h2 className="text-lg font-display text-white tracking-wide">Add Flight Manually</h2>
               </div>
               <button
                 onClick={() => { setManualOpen(false); resetManualForm(); }}
-                className="p-1.5 rounded-full hover:bg-secondary text-muted-foreground transition-colors"
+                className="p-1.5 rounded-full hover:bg-white/10 text-white/60 transition-colors"
                 title="Cancel"
               >
-                <X size={16} />
+                <X size={18} />
               </button>
             </div>
 
-            <div className="flex flex-col gap-5 bg-background p-4 rounded-2xl border border-border/50">
+            <div className="flex flex-col gap-6">
+              {/* Primary Lookup Fields */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Airline Selection */}
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Airline</label>
-                  <div className="h-[46px] relative">
+                  <label className="text-[10px] font-bold text-white/50 uppercase tracking-widest">Airline</label>
+                  <div className="h-[46px] relative input-box">
                     <Autocomplete
                       kind="airline"
                       value={mAirline}
                       onSelect={(airline) => {
                         setMAirline(airline);
-                        if (airline?.iata) {
-                          if (!mFlightNumber || !mFlightNumber.startsWith(airline.iata)) {
-                            setMFlightNumber(airline.iata);
-                          }
+                        if (airline?.iata && (!mFlightNumber || !mFlightNumber.startsWith(airline.iata))) {
+                          setMFlightNumber(airline.iata);
                         }
                       }}
                       testId="manual-airline"
-                      className="w-full h-full text-base"
+                      className="w-full h-full text-sm bg-transparent text-white px-3 focus:outline-none"
                     />
                   </div>
                 </div>
 
-                {/* Flight Number Selection */}
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Flight Number</label>
-                  <div className="h-[46px] relative">
+                  <label className="text-[10px] font-bold text-white/50 uppercase tracking-widest">Flight Number</label>
+                  <div className="h-[46px] relative input-box">
                     <Autocomplete
                       kind="flight"
                       value={mSelectedFlight || mFlightNumber}
@@ -731,33 +728,29 @@ export default function Import() {
                       extraParams={{ airline_iata: mAirline?.iata }}
                       placeholder="e.g. 101"
                       testId="manual-flight-number"
-                      className="w-full h-full text-base"
+                      className="w-full h-full text-sm bg-transparent text-white px-3 focus:outline-none"
                     />
                   </div>
                 </div>
 
-                {/* Date Picker Selection */}
                 <div className="flex flex-col gap-2 sm:col-span-2">
-                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Flight Date</label>
+                  <label className="text-[10px] font-bold text-white/50 uppercase tracking-widest">Flight Date</label>
                   <Popover>
                     <PopoverTrigger asChild>
-                      <button className="flex items-center justify-between w-full h-[46px] px-3 bg-white border border-border/60 rounded-xl text-left text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40 hover:border-border">
-                        <span className={mDate ? "text-foreground font-semibold" : "text-muted-foreground"}>
+                      <button className="flex items-center justify-between w-full h-[46px] px-3 input-box text-left text-sm focus:outline-none focus:border-primary/50 transition-colors">
+                        <span className={mDate ? "text-white font-semibold" : "text-white/40"}>
                           {mDate ? format(parse(mDate, "yyyy-MM-dd", new Date()), "PPP") : "Select a date..."}
                         </span>
-                        <CalendarDays size={18} className="text-muted-foreground" />
+                        <CalendarDays size={18} className="text-white/40" />
                       </button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
+                    <PopoverContent className="w-auto p-0 bg-[#020401] border-white/10" align="start">
                       <Calendar
                         mode="single"
                         selected={mDate ? parse(mDate, "yyyy-MM-dd", new Date()) : undefined}
                         onSelect={(date) => {
-                          if (date) {
-                            setMDate(format(date, "yyyy-MM-dd"));
-                          } else {
-                            setMDate("");
-                          }
+                          if (date) setMDate(format(date, "yyyy-MM-dd"));
+                          else setMDate("");
                         }}
                         initialFocus
                       />
@@ -770,43 +763,122 @@ export default function Import() {
                 type="button"
                 disabled={mFetching || !mAirline?.iata || !mFlightNumber.trim() || !mDate}
                 onClick={fetchManualDetails}
-                className="tl-btn-secondary px-6 flex items-center justify-center gap-2 text-sm font-bold h-[46px] w-full hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all shadow-sm"
+                className="selection-pill flex items-center justify-center gap-2 w-full h-[46px] border-primary text-primary hover:bg-primary/10 disabled:opacity-50 disabled:cursor-not-allowed"
                 data-testid="manual-lookup-btn"
               >
                 {mFetching ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
                 Verify Flight Data
               </button>
+
+              {/* Detailed Fields (always visible but populated by Verify) */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-white/5">
+                <div className="flex flex-col gap-2 col-span-2">
+                  <label className="text-[10px] font-bold text-white/50 uppercase tracking-widest">From Airport</label>
+                  <div className="h-[46px] relative input-box">
+                    <Autocomplete
+                      kind="airport"
+                      value={mFrom}
+                      onSelect={setMFrom}
+                      placeholder="e.g. JFK"
+                      className="w-full h-full text-sm bg-transparent text-white px-3 focus:outline-none uppercase font-mono"
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2 col-span-2">
+                  <label className="text-[10px] font-bold text-white/50 uppercase tracking-widest">To Airport</label>
+                  <div className="h-[46px] relative input-box">
+                    <Autocomplete
+                      kind="airport"
+                      value={mTo}
+                      onSelect={setMTo}
+                      placeholder="e.g. LHR"
+                      className="w-full h-full text-sm bg-transparent text-white px-3 focus:outline-none uppercase font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2 col-span-2">
+                  <label className="text-[10px] font-bold text-white/50 uppercase tracking-widest">Takeoff Time</label>
+                  <input
+                    type="time"
+                    value={mDepTime}
+                    onChange={(e) => setMDepTime(e.target.value)}
+                    className="h-[46px] px-3 input-box text-sm focus:outline-none text-white font-mono"
+                  />
+                </div>
+                <div className="flex flex-col gap-2 col-span-2">
+                  <label className="text-[10px] font-bold text-white/50 uppercase tracking-widest">Landing Time</label>
+                  <input
+                    type="time"
+                    value={mArrTime}
+                    onChange={(e) => setMArrTime(e.target.value)}
+                    className="h-[46px] px-3 input-box text-sm focus:outline-none text-white font-mono"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-2 col-span-2 sm:col-span-1">
+                  <label className="text-[10px] font-bold text-white/50 uppercase tracking-widest">Seat</label>
+                  <input
+                    type="text"
+                    value={mSeat}
+                    onChange={(e) => setMSeat(e.target.value)}
+                    placeholder="e.g. 12A"
+                    className="h-[46px] px-3 input-box text-sm focus:outline-none text-white font-mono uppercase"
+                  />
+                </div>
+                <div className="flex flex-col gap-2 col-span-2 sm:col-span-1">
+                  <label className="text-[10px] font-bold text-white/50 uppercase tracking-widest">PNR</label>
+                  <input
+                    type="text"
+                    value={mPnr}
+                    onChange={(e) => setMPnr(e.target.value)}
+                    placeholder="e.g. AB12CD"
+                    className="h-[46px] px-3 input-box text-sm focus:outline-none text-white font-mono uppercase"
+                  />
+                </div>
+                <div className="flex flex-col gap-2 col-span-2">
+                  <label className="text-[10px] font-bold text-white/50 uppercase tracking-widest">Passenger Name</label>
+                  <input
+                    type="text"
+                    value={mPassenger || profile?.preferred_name || user?.name || ""}
+                    onChange={(e) => setMPassenger(e.target.value)}
+                    placeholder="e.g. Jane Doe"
+                    className="h-[46px] px-3 input-box text-sm focus:outline-none text-white"
+                  />
+                </div>
+              </div>
             </div>
 
             {mFetching ? (
-              <div className="flex flex-col items-center justify-center py-10 gap-2 border border-border/40 rounded-3xl bg-secondary/10">
+              <div className="flex flex-col items-center justify-center py-10 gap-2 border border-white/5 rounded-[24px] bg-white/5">
                 <FlightLoadingAnimation size={120} />
               </div>
             ) : (
-              <div className="flex flex-col gap-2">
-                <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground px-1">Interactive Boarding Pass</p>
-                <BoardingPassCard
-                  flight={mSegment}
-                  isEditable={true}
-                  onChange={handleManualCardChange}
-                />
+              <div className="flex flex-col gap-2 mt-4">
+                <p className="text-[10px] uppercase tracking-widest font-semibold text-white/50 px-1 mb-2">Ticket Preview</p>
+                <div className="pointer-events-none">
+                  <BoardingPassCard
+                    flight={mSegment}
+                  />
+                </div>
               </div>
             )}
 
-            <div className="flex gap-3 border-t border-border pt-4 mt-2">
+            <div className="flex gap-3 border-t border-white/10 pt-4 mt-2">
               <button
                 type="button"
                 onClick={() => { setManualOpen(false); resetManualForm(); }}
-                className="flex-1 tl-btn-secondary text-sm py-2.5"
+                className="flex-1 selection-pill text-sm py-2.5 border-white/10 text-white/60 hover:bg-white/5"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={saveManual}
-                disabled={!mAirline?.iata || !mFlightNumber.trim() || !mDate || !(mFrom?.iata || mFetched?.flight?.departure_airport_iata) || !(mTo?.iata || mFetched?.flight?.arrival_airport_iata)}
-                className="flex-1 tl-btn-primary text-sm py-2.5"
+                disabled={!mAirline?.iata || !mFlightNumber.trim() || !mDate || !mFrom?.iata || !mTo?.iata || !mDepTime || !mArrTime}
+                className="flex-1 selection-pill active text-sm py-2.5 disabled:opacity-50 disabled:cursor-not-allowed"
                 data-testid="manual-save-btn"
+                title={(!mAirline?.iata || !mFlightNumber.trim() || !mDate || !mFrom?.iata || !mTo?.iata || !mDepTime || !mArrTime) ? "Please fill in all required fields (Airline, Flight No, Date, From, To, Takeoff, Landing)" : ""}
               >
                 Save Flight
               </button>
